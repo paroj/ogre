@@ -77,8 +77,8 @@ namespace Ogre
 
 		// generate the shader code
 		String code = dataBlock->getTemplate()->getTemplate();
-		StringVectorPtr pieces = mShaderPiecesManager->getPieces(dataBlock->getLanguage(), dataBlock->getShaderType());
-		code = ShaderGenerator::parse(code, *(dataBlock->getPropertyMap()), pieces);
+		StringVector* pieces = mShaderPiecesManager->getPieces(dataBlock->getLanguage(), dataBlock->getShaderType());
+		code = ShaderGenerator::parse(code, *(dataBlock->getPropertyMap()), pieces ? *pieces : StringVector());
 
 		GpuProgramPtr gpuProgram = createGpuProgram(name, code, dataBlock);
 
