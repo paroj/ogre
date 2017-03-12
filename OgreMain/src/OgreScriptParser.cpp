@@ -31,7 +31,7 @@ THE SOFTWARE.
 
 namespace Ogre
 {
-    ConcreteNodeListPtr ScriptParser::parse(const ScriptTokenListPtr &tokens)
+    ConcreteNodeListPtr ScriptParser::parse(const ScriptTokenList &tokens)
     {
         // MEMCATEGORY_GENERAL because SharedPtr can only free using that category
         ConcreteNodeListPtr nodes(OGRE_NEW_T(ConcreteNodeList, MEMCATEGORY_GENERAL)(), SPFM_DELETE_T);
@@ -41,11 +41,11 @@ namespace Ogre
 
         ConcreteNode *parent = 0;
         ConcreteNodePtr node;
-        ScriptToken *token = 0;
-        ScriptTokenList::iterator i = tokens->begin(), end = tokens->end();
+        const ScriptToken *token = 0;
+        ScriptTokenList::const_iterator i = tokens.begin(), end = tokens.end();
         while(i != end)
         {
-            token = (*i).get();
+            token = &(*i);
 
             switch(state)
             {
@@ -62,39 +62,39 @@ namespace Ogre
 
                         // The next token is the target
                         ++i;
-                        if(i == end || ((*i)->type != TID_WORD && (*i)->type != TID_QUOTE))
+                        if(i == end || (i->type != TID_WORD && i->type != TID_QUOTE))
                             OGRE_EXCEPT(Exception::ERR_INVALID_STATE, 
                                 Ogre::String("expected import target at line ") + 
                                     Ogre::StringConverter::toString(node->line),
                                 "ScriptParser::parse");
                         ConcreteNodePtr temp(OGRE_NEW ConcreteNode());
                         temp->parent = node.get();
-                        temp->file = (*i)->file;
-                        temp->line = (*i)->line;
-                        temp->type = (*i)->type == TID_WORD ? CNT_WORD : CNT_QUOTE;
+                        temp->file = i->file;
+                        temp->line = i->line;
+                        temp->type = i->type == TID_WORD ? CNT_WORD : CNT_QUOTE;
                         if(temp->type == CNT_QUOTE)
-                            temp->token = (*i)->lexeme.substr(1, token->lexeme.size() - 2);
+                            temp->token = i->lexeme.substr(1, token->lexeme.size() - 2);
                         else
-                            temp->token = (*i)->lexeme;
+                            temp->token = i->lexeme;
                         node->children.push_back(temp);
 
                         // The second-next token is the source
                         ++i;
                         ++i;
-                        if(i == end || ((*i)->type != TID_WORD && (*i)->type != TID_QUOTE))
+                        if(i == end || (i->type != TID_WORD && i->type != TID_QUOTE))
                             OGRE_EXCEPT(Exception::ERR_INVALID_STATE, 
                                 Ogre::String("expected import source at line ") + 
                                     Ogre::StringConverter::toString(node->line),
                                 "ScriptParser::parse");
                         temp = ConcreteNodePtr(OGRE_NEW ConcreteNode());
                         temp->parent = node.get();
-                        temp->file = (*i)->file;
-                        temp->line = (*i)->line;
-                        temp->type = (*i)->type == TID_WORD ? CNT_WORD : CNT_QUOTE;
+                        temp->file = i->file;
+                        temp->line = i->line;
+                        temp->type = i->type == TID_WORD ? CNT_WORD : CNT_QUOTE;
                         if(temp->type == CNT_QUOTE)
-                            temp->token = (*i)->lexeme.substr(1, (*i)->lexeme.size() - 2);
+                            temp->token = i->lexeme.substr(1, i->lexeme.size() - 2);
                         else
-                            temp->token = (*i)->lexeme;
+                            temp->token = i->lexeme;
                         node->children.push_back(temp);
 
                         // Consume all the newlines
@@ -123,35 +123,35 @@ namespace Ogre
 
                         // The next token is the variable
                         ++i;
-                        if(i == end || (*i)->type != TID_VARIABLE)
+                        if(i == end || i->type != TID_VARIABLE)
                             OGRE_EXCEPT(Exception::ERR_INVALID_STATE, 
                                 Ogre::String("expected variable name at line ") + 
                                     Ogre::StringConverter::toString(node->line),
                                 "ScriptParser::parse");
                         ConcreteNodePtr temp(OGRE_NEW ConcreteNode());
                         temp->parent = node.get();
-                        temp->file = (*i)->file;
-                        temp->line = (*i)->line;
+                        temp->file = i->file;
+                        temp->line = i->line;
                         temp->type = CNT_VARIABLE;
-                        temp->token = (*i)->lexeme;
+                        temp->token = i->lexeme;
                         node->children.push_back(temp);
 
                         // The next token is the assignment
                         ++i;
-                        if(i == end || ((*i)->type != TID_WORD && (*i)->type != TID_QUOTE))
+                        if(i == end || (i->type != TID_WORD && i->type != TID_QUOTE))
                             OGRE_EXCEPT(Exception::ERR_INVALID_STATE, 
                                 Ogre::String("expected variable value at line ") + 
                                     Ogre::StringConverter::toString(node->line),
                                 "ScriptParser::parse");
                         temp = ConcreteNodePtr(OGRE_NEW ConcreteNode());
                         temp->parent = node.get();
-                        temp->file = (*i)->file;
-                        temp->line = (*i)->line;
-                        temp->type = (*i)->type == TID_WORD ? CNT_WORD : CNT_QUOTE;
+                        temp->file = i->file;
+                        temp->line = i->line;
+                        temp->type = i->type == TID_WORD ? CNT_WORD : CNT_QUOTE;
                         if(temp->type == CNT_QUOTE)
-                            temp->token = (*i)->lexeme.substr(1, (*i)->lexeme.size() - 2);
+                            temp->token = i->lexeme.substr(1, i->lexeme.size() - 2);
                         else
-                            temp->token = (*i)->lexeme;
+                            temp->token = i->lexeme;
                         node->children.push_back(temp);
 
                         // Consume all the newlines
@@ -240,8 +240,8 @@ namespace Ogre
                 if(token->type == TID_NEWLINE)
                 {
                     // Look ahead to the next non-newline token and if it isn't an {, this was a property
-                    ScriptTokenList::iterator next = skipNewlines(i, end);
-                    if(next == end || (*next)->type != TID_LBRACKET)
+                    ScriptTokenList::const_iterator next = skipNewlines(i, end);
+                    if(next == end || next->type != TID_LBRACKET)
                     {
                         // Ended a property here
                         if(parent)
@@ -260,22 +260,22 @@ namespace Ogre
                     // The following token are the parent objects (base classes).
                     // Require at least one of them.
 
-                    ScriptTokenList::iterator j = i + 1;
+                    ScriptTokenList::const_iterator j = i + 1;
                     j = skipNewlines(j, end);
-                    if(j == end || ((*j)->type != TID_WORD && (*j)->type != TID_QUOTE)) {
+                    if(j == end || (j->type != TID_WORD && j->type != TID_QUOTE)) {
                         OGRE_EXCEPT(Exception::ERR_INVALID_STATE, 
                             Ogre::String("expected object identifier at line ") + 
                                     Ogre::StringConverter::toString(node->line),
                             "ScriptParser::parse");
                     }
 
-                    while(j != end && ((*j)->type == TID_WORD || (*j)->type == TID_QUOTE))
+                    while(j != end && (j->type == TID_WORD || j->type == TID_QUOTE))
                     {
                         ConcreteNodePtr tempNode = ConcreteNodePtr(OGRE_NEW ConcreteNode());
-                        tempNode->token = (*j)->lexeme;
-                        tempNode->file = (*j)->file;
-                        tempNode->line = (*j)->line;
-                        tempNode->type = (*j)->type == TID_WORD ? CNT_WORD : CNT_QUOTE;
+                        tempNode->token = j->lexeme;
+                        tempNode->file = j->file;
+                        tempNode->line = j->line;
+                        tempNode->type = j->type == TID_WORD ? CNT_WORD : CNT_QUOTE;
                         tempNode->parent = node.get();
                         node->children.push_back(tempNode);
                         ++j;
@@ -438,16 +438,16 @@ namespace Ogre
         return nodes;
     }
 
-    ConcreteNodeListPtr ScriptParser::parseChunk(const ScriptTokenListPtr &tokens)
+    ConcreteNodeListPtr ScriptParser::parseChunk(const ScriptTokenList &tokens)
     {
         // MEMCATEGORY_GENERAL because SharedPtr can only free using that category
         ConcreteNodeListPtr nodes(OGRE_NEW_T(ConcreteNodeList, MEMCATEGORY_GENERAL)(), SPFM_DELETE_T);
 
         ConcreteNodePtr node;
-        ScriptToken *token = 0;
-        for(ScriptTokenList::const_iterator i = tokens->begin(); i != tokens->end(); ++i)
+        const ScriptToken *token = 0;
+        for(ScriptTokenList::const_iterator i = tokens.begin(); i != tokens.end(); ++i)
         {
-            token = (*i).get();
+            token = &(*i);
 
             switch(token->type)
             {
@@ -488,18 +488,18 @@ namespace Ogre
         return nodes;
     }
 
-    ScriptToken *ScriptParser::getToken(ScriptTokenList::iterator i, ScriptTokenList::iterator end, int offset)
+    const ScriptToken *ScriptParser::getToken(ScriptTokenList::const_iterator i, ScriptTokenList::const_iterator end, int offset)
     {
-        ScriptToken *token = 0;
-        ScriptTokenList::iterator iter = i + offset;
+        const ScriptToken *token = 0;
+        ScriptTokenList::const_iterator iter = i + offset;
         if(iter != end)
-            token = (*i).get();
+            token = &(*i);
         return token;
     }
 
-    ScriptTokenList::iterator ScriptParser::skipNewlines(ScriptTokenList::iterator i, ScriptTokenList::iterator end)
+    ScriptTokenList::const_iterator ScriptParser::skipNewlines(ScriptTokenList::const_iterator i, ScriptTokenList::const_iterator end)
     {
-        while(i != end && (*i)->type == TID_NEWLINE)
+        while(i != end && i->type == TID_NEWLINE)
             ++i;
         return i;
     }

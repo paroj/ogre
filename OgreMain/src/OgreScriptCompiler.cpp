@@ -595,7 +595,7 @@ namespace Ogre
             if(stream)
             {
                 ScriptLexer lexer;
-                ScriptTokenListPtr tokens = lexer.tokenize(stream->getAsString(), name);
+                ScriptTokenList tokens = lexer.tokenize(stream->getAsString(), name);
                 ScriptParser parser;
                 nodes = parser.parse(tokens);
             }
@@ -953,7 +953,7 @@ namespace Ogre
                 {
                     // Found the variable, so process it and insert it into the tree
                     ScriptLexer lexer;
-                    ScriptTokenListPtr tokens = lexer.tokenize(varAccess.second, var->file);
+                    ScriptTokenList tokens = lexer.tokenize(varAccess.second, var->file);
                     ScriptParser parser;
                     ConcreteNodeListPtr cst = parser.parseChunk(tokens);
                     AbstractNodeListPtr ast = convertToAST(cst);

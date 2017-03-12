@@ -45,11 +45,11 @@ namespace Ogre {
     class _OgreExport ScriptParser : public ScriptCompilerAlloc
     {
     public:
-        static ConcreteNodeListPtr parse(const ScriptTokenListPtr &tokens);
-        static ConcreteNodeListPtr parseChunk(const ScriptTokenListPtr &tokens);
+        static ConcreteNodeListPtr parse(const ScriptTokenList &tokens);
+        static ConcreteNodeListPtr parseChunk(const ScriptTokenList &tokens);
     private:
-        static ScriptToken *getToken(ScriptTokenList::iterator i, ScriptTokenList::iterator end, int offset);
-        static ScriptTokenList::iterator skipNewlines(ScriptTokenList::iterator i, ScriptTokenList::iterator end);
+        static const ScriptToken *getToken(ScriptTokenList::const_iterator i, ScriptTokenList::const_iterator end, int offset);
+        static ScriptTokenList::const_iterator skipNewlines(ScriptTokenList::const_iterator i, ScriptTokenList::const_iterator end);
     };
     
     /** @} */
