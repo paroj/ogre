@@ -60,15 +60,10 @@ namespace Ogre
 {
     //-------------------------------------------------------------------------------------------------//
     GLXWindow::GLXWindow(GLXGLSupport *glsupport) :
-        mGLSupport(glsupport), mContext(0)
+        X11Window(glsupport), mContext(0)
     {
-        mWindow = 0;
-
-        mIsTopLevel = false;
         mIsFullScreen = false;
-        mIsExternal = false;
         mIsExternalGLControl = false;
-        mClosed = false;
         mActive = false;
         mHidden = false;
         mVisible = false;
@@ -654,7 +649,7 @@ namespace Ogre
     }
 
     //-------------------------------------------------------------------------------------------------//
-    void GLXWindow::reposition(int left, int top)
+    void X11Window::reposition(int left, int top)
     {
         if (mClosed || ! mIsTopLevel)
             return;
@@ -663,7 +658,7 @@ namespace Ogre
     }
 
     //-------------------------------------------------------------------------------------------------//
-    void GLXWindow::resize(uint width, uint height)
+    void X11Window::resize(uint width, uint height)
     {
         if (mClosed)
             return;
@@ -689,7 +684,7 @@ namespace Ogre
     }
 
     //-------------------------------------------------------------------------------------------------//
-    void GLXWindow::windowMovedOrResized()
+    void X11Window::windowMovedOrResized()
     {
         if (mClosed || !mWindow)
             return;
@@ -779,7 +774,7 @@ namespace Ogre
         return mGLSupport->getContextProfile() == GLNativeSupport::CONTEXT_ES ? PF_BYTE_RGBA : PF_BYTE_RGB;
     }
 
-    void GLXWindow::copyContentsToMemory(const Box& src, const PixelBox &dst, FrameBuffer buffer)
+    void X11Window::copyContentsToMemory(const Box& src, const PixelBox &dst, FrameBuffer buffer)
     {
         if (mClosed)
             return;

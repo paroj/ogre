@@ -38,7 +38,28 @@ namespace Ogre
     class GLXContext;
     class GLXGLSupport;
 
-    class _OgrePrivate GLXWindow : public RenderWindow
+    class _OgrePrivate X11Window : public RenderWindow
+    {
+    public:
+        X11Window(GLXGLSupport* glsupport)
+            : mWindow(0), mClosed(false), mIsTopLevel(false), mIsExternal(false), mGLSupport(glsupport)
+        {
+        }
+        void reposition(int left, int top);
+        void resize(unsigned int width, unsigned int height);
+        void copyContentsToMemory(const Box& src, const PixelBox &dst, FrameBuffer buffer);
+        void windowMovedOrResized();
+        bool requiresTextureFlipping() const { return false; }
+    protected:
+        ::Window      mWindow;
+        bool mClosed;
+        bool mIsTopLevel;
+        bool mIsExternal;
+
+        GLXGLSupport* mGLSupport;
+    };
+
+    class _OgrePrivate GLXWindow : public X11Window
     {
     public:
         GLXWindow(GLXGLSupport* glsupport);
@@ -79,22 +100,10 @@ namespace Ogre
 
         /** @copydoc see RenderWindow::getVSyncInterval */
         unsigned int getVSyncInterval() const;
-        
-        /** @copydoc see RenderWindow::reposition */
-        void reposition(int left, int top);
-        
-        /** @copydoc see RenderWindow::resize */
-        void resize(unsigned int width, unsigned int height);
 
-        /** @copydoc see RenderWindow::windowMovedOrResized */
-        void windowMovedOrResized();
-        
         /** @copydoc see RenderWindow::swapBuffers */
         void swapBuffers();
-        
-        /** @copydoc see RenderTarget::copyContentsToMemory */
-        void copyContentsToMemory(const Box& src, const PixelBox &dst, FrameBuffer buffer);
-        
+
         /**
            @remarks
            * Get custom attribute; the following attributes are valid:
@@ -106,22 +115,15 @@ namespace Ogre
            */
         void getCustomAttribute(const String& name, void* pData);
         
-        bool requiresTextureFlipping() const { return false; }
-
         PixelFormat suggestPixelFormat() const;
 
     private:
-        bool mClosed;
         bool mVisible;
         bool mHidden;
-        bool mIsTopLevel;
-        bool mIsExternal;
         bool mIsExternalGLControl;
         bool mVSync;
         int mVSyncInterval;
         
-        GLXGLSupport* mGLSupport;
-        ::Window      mWindow;
         GLXContext*   mContext;
         void switchFullScreen(bool fullscreen);
     };
