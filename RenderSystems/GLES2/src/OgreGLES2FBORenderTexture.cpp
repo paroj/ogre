@@ -88,7 +88,7 @@ namespace Ogre {
 #endif
     
     //-----------------------------------------------------------------------------
-    bool GLES2FBORenderTexture::attachDepthBuffer( DepthBuffer *depthBuffer )
+    bool GLES2FBORenderTexture::attachDepthBuffer( RenderTarget *depthBuffer )
     {
         bool result;
         if( (result = GLRenderTexture::attachDepthBuffer( depthBuffer )) )

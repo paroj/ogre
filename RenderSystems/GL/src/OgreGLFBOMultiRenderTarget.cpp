@@ -74,7 +74,7 @@ namespace Ogre {
         }
     }
     //-----------------------------------------------------------------------------
-    bool GLFBOMultiRenderTarget::attachDepthBuffer( DepthBuffer *depthBuffer )
+    bool GLFBOMultiRenderTarget::attachDepthBuffer( RenderTarget *depthBuffer )
     {
         bool result;
         if( (result = MultiRenderTarget::attachDepthBuffer( depthBuffer )) )

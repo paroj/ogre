@@ -254,7 +254,7 @@ namespace Ogre {
         }
     }
 
-    void GLFrameBufferObject::attachDepthBuffer( DepthBuffer *depthBuffer )
+    void GLFrameBufferObject::attachDepthBuffer( RenderTarget *depthBuffer )
     {
         GLDepthBuffer *glDepthBuffer = static_cast<GLDepthBuffer*>(depthBuffer);
 

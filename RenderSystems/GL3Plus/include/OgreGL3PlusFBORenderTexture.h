@@ -50,7 +50,7 @@ namespace Ogre {
         virtual void swapBuffers();
 
         /// Override so we can attach the depth buffer to the FBO
-        virtual bool attachDepthBuffer( DepthBuffer *depthBuffer );
+        virtual bool attachDepthBuffer( RenderTarget *depthBuffer );
         virtual void detachDepthBuffer();
         virtual void _detachDepthBuffer();
 

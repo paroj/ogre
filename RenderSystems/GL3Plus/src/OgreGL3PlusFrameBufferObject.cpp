@@ -284,12 +284,11 @@ namespace Ogre {
         }
     }
 
-    void GL3PlusFrameBufferObject::attachDepthBuffer( DepthBuffer *depthBuffer )
+    void GL3PlusFrameBufferObject::attachDepthBuffer( RenderTarget *depthBuffer )
     {
         bind(true); // recreate FBO if unusable with current context, bind it
 
-        GL3PlusDepthBuffer *glDepthBuffer = static_cast<GL3PlusDepthBuffer*>(depthBuffer);
-        if( glDepthBuffer )
+        if(auto glDepthBuffer = dynamic_cast<GL3PlusDepthBuffer*>(depthBuffer))
         {
             auto *depthBuf   = glDepthBuffer->getDepthBuffer();
             auto *stencilBuf = glDepthBuffer->getStencilBuffer();
@@ -300,6 +299,10 @@ namespace Ogre {
             // Attach stencil buffer, if it has one.
             if( stencilBuf )
                 stencilBuf->bindToFramebuffer( GL_STENCIL_ATTACHMENT, 0 );
+        }
+        else if (auto glTexture = dynamic_cast<GLRenderTexture*>(depthBuffer))
+        {
+            glTexture->getFBO()->getSurface(0).buffer->bindToFramebuffer(GL_DEPTH_ATTACHMENT, 0);
         }
         else
         {

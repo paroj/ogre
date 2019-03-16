@@ -33,14 +33,19 @@ namespace Ogre
 {
     DepthBuffer::DepthBuffer( uint16 poolId, uint16 bitDepth, uint32 width, uint32 height,
                               uint32 fsaa, const String &fsaaHint, bool manual ) :
-                mPoolId(poolId),
                 mBitDepth(bitDepth),
-                mWidth(width),
-                mHeight(height),
-                mFsaa(fsaa),
-                mFsaaHint(fsaaHint),
                 mManual(manual)
     {
+        mDepthBufferPoolId = poolId;
+        mWidth = width;
+        mHeight = height;
+        mFSAA = fsaa;
+        mFSAAHint = fsaaHint;
+    }
+
+    void DepthBuffer::copyContentsToMemory(const Box& src, const PixelBox& dst, FrameBuffer buffer)
+    {
+        OGRE_EXCEPT(Exception::ERR_INVALIDPARAMS, "reading from DepthBuffer not possible");
     }
 
     DepthBuffer::~DepthBuffer()
@@ -51,7 +56,7 @@ namespace Ogre
     void DepthBuffer::_setPoolId( uint16 poolId )
     {
         //Change the pool Id
-        mPoolId = poolId;
+        mDepthBufferPoolId = poolId;
 
         //Render Targets were attached to us, but they have a different pool Id,
         //so detach ourselves from them
@@ -60,22 +65,12 @@ namespace Ogre
     //-----------------------------------------------------------------------
     uint16 DepthBuffer::getPoolId() const
     {
-        return mPoolId;
+        return mDepthBufferPoolId;
     }
     //-----------------------------------------------------------------------
     uint16 DepthBuffer::getBitDepth() const
     {
         return mBitDepth;
-    }
-    //-----------------------------------------------------------------------
-    uint32 DepthBuffer::getWidth() const
-    {
-        return mWidth;
-    }
-    //----------------------------------------------------------------------
-    uint32 DepthBuffer::getHeight() const
-    {
-        return mHeight;
     }
     //-----------------------------------------------------------------------
     bool DepthBuffer::isManual() const

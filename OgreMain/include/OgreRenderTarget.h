@@ -121,13 +121,15 @@ namespace Ogre {
          */
         void setDepthBufferPool( uint16 poolId );
 
-        //Returns the pool ID this RenderTarget should query from. @see DepthBuffer
+        /// Returns the pool ID this RenderTarget should query from.
         uint16 getDepthBufferPool() const;
 
-        DepthBuffer* getDepthBuffer() const;
+        RenderTarget* getDepthBuffer() const;
 
         //Returns false if couldn't attach
-        virtual bool attachDepthBuffer( DepthBuffer *depthBuffer );
+        virtual bool attachDepthBuffer( RenderTarget *depthBuffer );
+
+        bool attachDepthBuffer( DepthBuffer *depthBuffer );
 
         virtual void detachDepthBuffer();
 
@@ -476,7 +478,7 @@ namespace Ogre {
         uint32 mHeight;
         uint32 mColourDepth;
         uint16       mDepthBufferPoolId;
-        DepthBuffer *mDepthBuffer;
+        RenderTarget *mDepthBuffer;
 
         // Stats
         FrameStats mStats;

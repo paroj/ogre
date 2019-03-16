@@ -119,7 +119,7 @@ namespace Ogre {
         return mDepthBufferPoolId;
     }
     //-----------------------------------------------------------------------
-    DepthBuffer* RenderTarget::getDepthBuffer() const
+    RenderTarget* RenderTarget::getDepthBuffer() const
     {
         return mDepthBuffer;
     }
@@ -130,21 +130,31 @@ namespace Ogre {
 
         if( (retVal = depthBuffer->isCompatible( this )) )
         {
-            detachDepthBuffer();
-            mDepthBuffer = depthBuffer;
-            mDepthBuffer->_notifyRenderTargetAttached( this );
+            depthBuffer->_notifyRenderTargetAttached( this );
+
+            attachDepthBuffer(static_cast<RenderTarget*>(depthBuffer));
         }
 
         return retVal;
     }
+
+    bool RenderTarget::attachDepthBuffer( RenderTarget *depthBuffer )
+    {
+        detachDepthBuffer();
+        mDepthBuffer = depthBuffer;
+
+        return true;
+    }
+
     //-----------------------------------------------------------------------
     void RenderTarget::detachDepthBuffer()
     {
-        if( mDepthBuffer )
+        if (auto depthBuffer = dynamic_cast<DepthBuffer*>(mDepthBuffer))
         {
-            mDepthBuffer->_notifyRenderTargetDetached( this );
-            mDepthBuffer = 0;
+            depthBuffer->_notifyRenderTargetDetached(this);
         }
+
+        _detachDepthBuffer();
     }
     //-----------------------------------------------------------------------
     void RenderTarget::_detachDepthBuffer()

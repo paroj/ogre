@@ -52,7 +52,7 @@ namespace Ogre {
             while OGL setups the DepthBuffer per FBO. So the DepthBuffer (RenderBuffer) needs to
             be attached for OGL.
         */
-        void attachDepthBuffer( DepthBuffer *depthBuffer );
+        void attachDepthBuffer( RenderTarget *depthBuffer );
         void detachDepthBuffer();
         
         GLFBOManager *getManager() { return mManager; }

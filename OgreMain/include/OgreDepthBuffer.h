@@ -30,6 +30,7 @@ THE SOFTWARE.
 
 #include "OgrePrerequisites.h"
 #include "OgreHeaderPrefix.h"
+#include "OgreRenderTarget.h"
 
 namespace Ogre
 {
@@ -76,7 +77,7 @@ namespace Ogre
         @version
             1.0
      */
-    class _OgreExport DepthBuffer : public RenderSysAlloc
+    class _OgreExport DepthBuffer : public RenderTarget
     {
     public:
         enum PoolId
@@ -97,10 +98,11 @@ namespace Ogre
         /// Gets the pool id in which this DepthBuffer lives
         virtual uint16 getPoolId() const;
         virtual uint16 getBitDepth() const;
-        virtual uint32 getWidth() const;
-        virtual uint32 getHeight() const;
-        uint32 getFSAA() const { return mFsaa; }
-        const String& getFSAAHint() const { return mFsaaHint; }
+
+        bool requiresTextureFlipping() const { return false; }
+
+        void copyContentsToMemory(const Box& src, const PixelBox& dst, FrameBuffer buffer = FB_AUTO);
+
         OGRE_DEPRECATED uint32 getFsaa() const { return getFSAA(); }
         OGRE_DEPRECATED const String& getFsaaHint() const { return getFSAAHint(); }
 
@@ -137,13 +139,7 @@ namespace Ogre
 
     protected:
         typedef std::set<RenderTarget*> RenderTargetSet;
-
-        uint16                      mPoolId;
         uint16                      mBitDepth;
-        uint32                      mWidth;
-        uint32                      mHeight;
-        uint32                      mFsaa;
-        String                      mFsaaHint;
 
         bool                        mManual; //We don't Release manual surfaces on destruction
         RenderTargetSet             mAttachedRenderTargets;

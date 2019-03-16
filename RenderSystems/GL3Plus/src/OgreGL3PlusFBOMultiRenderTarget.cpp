@@ -73,7 +73,7 @@ namespace Ogre {
         }
     }
 
-    bool GL3PlusFBOMultiRenderTarget::attachDepthBuffer( DepthBuffer *depthBuffer )
+    bool GL3PlusFBOMultiRenderTarget::attachDepthBuffer( RenderTarget *depthBuffer )
     {
         bool result;
         if( (result = MultiRenderTarget::attachDepthBuffer( depthBuffer )) )

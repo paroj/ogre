@@ -76,7 +76,7 @@ namespace Ogre {
         mFB.swapBuffers();
     }
 
-    bool GL3PlusFBORenderTexture::attachDepthBuffer( DepthBuffer *depthBuffer )
+    bool GL3PlusFBORenderTexture::attachDepthBuffer( RenderTarget *depthBuffer )
     {
         bool result;
         if( (result = GLRenderTexture::attachDepthBuffer( depthBuffer )) )

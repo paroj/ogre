@@ -347,7 +347,7 @@ namespace Ogre {
         }
     }
 
-    void GLES2FrameBufferObject::attachDepthBuffer( DepthBuffer *depthBuffer )
+    void GLES2FrameBufferObject::attachDepthBuffer( RenderTarget *depthBuffer )
     {
         bind(true); // recreate FBO if unusable with current context, bind it
 

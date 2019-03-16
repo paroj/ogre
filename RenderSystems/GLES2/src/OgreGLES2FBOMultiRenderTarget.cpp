@@ -73,7 +73,7 @@ namespace Ogre {
         }
     }
     //-----------------------------------------------------------------------------
-    bool GLES2FBOMultiRenderTarget::attachDepthBuffer( DepthBuffer *depthBuffer )
+    bool GLES2FBOMultiRenderTarget::attachDepthBuffer( RenderTarget *depthBuffer )
     {
         bool result;
         if( (result = MultiRenderTarget::attachDepthBuffer( depthBuffer )) )
