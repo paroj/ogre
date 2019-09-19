@@ -302,6 +302,7 @@ void GLTextureBuffer::upload(const PixelBox &data, const Box &dest)
                 break;
             case GL_TEXTURE_2D:
             case GL_TEXTURE_CUBE_MAP:
+            case GL_TEXTURE_RECTANGLE:
                 glTexSubImage2D(mFaceTarget, mLevel, 
                     dest.left, dest.top, 
                     dest.getWidth(), dest.getHeight(),

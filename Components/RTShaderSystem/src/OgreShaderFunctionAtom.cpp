@@ -450,6 +450,9 @@ void SampleTextureAtom::writeSourceCode(std::ostream& os, const String& targetLa
     case GCT_SAMPLER2D:
         os << "2D";
         break;
+    case GCT_SAMPLERRECT:
+        os << "2DRect";
+        break;
     case GCT_SAMPLER3D:
         os << "3D";
         break;

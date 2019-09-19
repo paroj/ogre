@@ -89,6 +89,8 @@ namespace Ogre {
                 return GL_TEXTURE_1D;
             case TEX_TYPE_2D:
                 return GL_TEXTURE_2D;
+            case TEX_TYPE_2D_RECT:
+                return GL_TEXTURE_RECTANGLE;
             case TEX_TYPE_3D:
                 return GL_TEXTURE_3D;
             case TEX_TYPE_CUBE_MAP:
@@ -150,15 +152,6 @@ namespace Ogre {
             mRenderSystem->_getStateCacheManager()->setTexParameteri(getGLTextureTarget(),
                 GL_TEXTURE_MAX_LEVEL, mNumMipmaps);
         
-        // Set some misc default parameters so NVidia won't complain, these can of course be changed later
-        mRenderSystem->_getStateCacheManager()->setTexParameteri(getGLTextureTarget(), GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        mRenderSystem->_getStateCacheManager()->setTexParameteri(getGLTextureTarget(), GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        if (GLEW_VERSION_1_2)
-        {
-            mRenderSystem->_getStateCacheManager()->setTexParameteri(getGLTextureTarget(), GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            mRenderSystem->_getStateCacheManager()->setTexParameteri(getGLTextureTarget(), GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        }
-
         if ((mUsage & TU_AUTOMIPMAP) && mNumRequestedMipmaps)
         {
             mRenderSystem->_getStateCacheManager()->setTexParameteri( getGLTextureTarget(), GL_GENERATE_MIPMAP, GL_TRUE );
@@ -262,7 +255,10 @@ namespace Ogre {
                         }
                         break;
                     case TEX_TYPE_2D_RECT:
-                        break;
+                        glTexImage2D(GL_TEXTURE_RECTANGLE, mip, internalformat,
+                            width, height, 0, 
+                            format, datatype, 0);
+                        break;;
                     case TEX_TYPE_EXTERNAL_OES:
                         OGRE_EXCEPT(
                             Exception::ERR_RENDERINGAPI_ERROR,

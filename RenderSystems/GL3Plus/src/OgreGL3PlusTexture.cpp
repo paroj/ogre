@@ -122,16 +122,6 @@ namespace Ogre {
         mRenderSystem->_getStateCacheManager()->setTexParameteri(texTarget, GL_TEXTURE_BASE_LEVEL, 0);
         mRenderSystem->_getStateCacheManager()->setTexParameteri(texTarget, GL_TEXTURE_MAX_LEVEL, mNumMipmaps);
 
-        // Set some misc default parameters, these can of course be changed later.
-        mRenderSystem->_getStateCacheManager()->setTexParameteri(texTarget,
-                                            GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        mRenderSystem->_getStateCacheManager()->setTexParameteri(texTarget,
-                                            GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        mRenderSystem->_getStateCacheManager()->setTexParameteri(texTarget,
-                                            GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        mRenderSystem->_getStateCacheManager()->setTexParameteri(texTarget,
-                                            GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
         // Set up texture swizzling.
         mRenderSystem->_getStateCacheManager()->setTexParameteri(texTarget, GL_TEXTURE_SWIZZLE_R, GL_RED);
         mRenderSystem->_getStateCacheManager()->setTexParameteri(texTarget, GL_TEXTURE_SWIZZLE_G, GL_GREEN);
@@ -250,8 +240,10 @@ namespace Ogre {
                     OGRE_CHECK_GL_ERROR(glTexStorage1D(GL_TEXTURE_1D, GLsizei(mNumMipmaps+1), format, GLsizei(width)));
                     break;
                 case TEX_TYPE_2D:
-                case TEX_TYPE_2D_RECT:
                     OGRE_CHECK_GL_ERROR(glTexStorage2D(GL_TEXTURE_2D, GLsizei(mNumMipmaps+1), format, GLsizei(width), GLsizei(height)));
+                    break;
+                case TEX_TYPE_2D_RECT:
+                    OGRE_CHECK_GL_ERROR(glTexStorage2D(GL_TEXTURE_RECTANGLE, GLsizei(mNumMipmaps+1), format, GLsizei(width), GLsizei(height)));
                     break;
                 case TEX_TYPE_CUBE_MAP:
                     OGRE_CHECK_GL_ERROR(glTexStorage2D(GL_TEXTURE_CUBE_MAP, GLsizei(mNumMipmaps+1), format, GLsizei(width), GLsizei(height)));
