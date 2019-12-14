@@ -71,10 +71,10 @@ namespace Ogre {
     {
     public:
         /** Tokenizes the given input and returns the list of tokens found */
-        static ScriptTokenList tokenize(const String &str, const String &source);
+        static ScriptTokenList tokenize(String str, const String &source);
     private: // Private utility operations
-        static ScriptTokenList _tokenize(const String &str, const char* source, String& error);
-        static void setToken(const String &lexeme, uint32 line, ScriptTokenList& tokens);
+        static ScriptTokenList _tokenize(String str, const char* source, String& error);
+        static void setToken(char* lexeme, uint32 line, ScriptTokenList& tokens, size_t lexemeLen);
         static bool isWhitespace(Ogre::String::value_type c);
         static bool isNewline(Ogre::String::value_type c);
     };
