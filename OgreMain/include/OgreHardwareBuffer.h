@@ -75,16 +75,20 @@ namespace Ogre {
     {
 
         public:
-            /// Enums describing buffer usage; not mutually exclusive
+            /// Enums describing buffer usage; i.e. the accessibility tradeoff between CPU and GPU
             enum Usage
             {
+                /** The buffer can only be initialised once by the CPU.
+                 Successively modifying the buffer is neither possible by the CPU nor by the GPU.
+                 */
+                HBU_IMMUTABLE = 0,
                 /** Static buffer which the application rarely modifies once created. Modifying
                 the contents of this buffer will involve a performance hit.
                 */
                 HBU_STATIC = 1,
-                /** Indicates the application would like to modify this buffer with the CPU
-                fairly often.
-                Buffers created with this flag will typically end up in AGP memory rather
+                /** Optimise flow from CPU to GPU
+                Like when the data will be generated on-the-fly and sent with a high frequency.
+                Buffers created with this flag will typically end up in CPU accessible memory rather
                 than video memory.
 
                 This is the least optimal buffer setting.
