@@ -644,16 +644,8 @@ namespace Ogre {
             static GpuProgramParametersSharedPtr msInfiniteExtrusionParams;
             static GpuProgramParametersSharedPtr msFiniteExtrusionParams;
 
-            Pass* mShadowTextureCustomCasterPass;
-            Pass* mShadowTextureCustomReceiverPass;
-            String mShadowTextureCustomCasterVertexProgram;
-            String mShadowTextureCustomCasterFragmentProgram;
-            String mShadowTextureCustomReceiverVertexProgram;
-            String mShadowTextureCustomReceiverFragmentProgram;
-            GpuProgramParametersSharedPtr mShadowTextureCustomCasterVPParams;
-            GpuProgramParametersSharedPtr mShadowTextureCustomCasterFPParams;
-            GpuProgramParametersSharedPtr mShadowTextureCustomReceiverVPParams;
-            GpuProgramParametersSharedPtr mShadowTextureCustomReceiverFPParams;
+            MaterialPtr mShadowTextureCustomCaster;
+            MaterialPtr mShadowTextureCustomReceiver;
 
             SamplerPtr mBorderSampler;
 

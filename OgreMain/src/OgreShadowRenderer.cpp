@@ -51,8 +51,6 @@ mShadowDebugPass(0),
 mShadowStencilPass(0),
 mShadowIndexBufferSize(51200),
 mShadowIndexBufferUsedSize(0),
-mShadowTextureCustomCasterPass(0),
-mShadowTextureCustomReceiverPass(0),
 mShadowAdditiveLightClip(false),
 mDebugShadows(false),
 mShadowMaterialInitDone(false),
@@ -402,8 +400,9 @@ void SceneManager::ShadowRenderer::renderModulativeTextureShadowedQueueGroupObje
             // Get camera for current shadow texture
             Camera *cam = currentShadowTexture->getBuffer()->getRenderTarget()->getViewport(0)->getCamera();
             // Hook up receiver texture
-            Pass* targetPass = mShadowTextureCustomReceiverPass ?
-                    mShadowTextureCustomReceiverPass : mShadowReceiverPass;
+            Pass* targetPass = mShadowTextureCustomReceiver
+                                   ? mShadowTextureCustomReceiver->getBestTechnique()->getPass(0)
+                                   : mShadowReceiverPass;
 
             // if this light is a spotlight, we need to add the spot fader layer
             // BUT not if using a custom projection matrix, since then it will be
@@ -537,8 +536,9 @@ void SceneManager::ShadowRenderer::renderAdditiveTextureShadowedQueueGroupObject
                     // Get camera for current shadow texture
                     Camera *cam = currentShadowTexture->getBuffer()->getRenderTarget()->getViewport(0)->getCamera();
                     // Hook up receiver texture
-                    Pass* targetPass = mShadowTextureCustomReceiverPass ?
-                        mShadowTextureCustomReceiverPass : mShadowReceiverPass;
+                    Pass* targetPass = mShadowTextureCustomReceiver
+                                           ? mShadowTextureCustomReceiver->getBestTechnique()->getPass(0)
+                                           : mShadowReceiverPass;
 
                     // account for the RTSS
                     if (auto betterTechnique = targetPass->getParent()->getParent()->getBestTechnique())
@@ -1284,81 +1284,24 @@ void SceneManager::ShadowRenderer::setShadowVolumeStencilState(bool secondpass, 
 }
 void SceneManager::ShadowRenderer::setShadowTextureCasterMaterial(const MaterialPtr& mat)
 {
+    mShadowTextureCustomCaster = mat;
+    if(mat)
+    {
+        mat->load();
+    }
+
     if(!mat) {
-        mShadowTextureCustomCasterPass = 0;
+        mShadowTextureCustomCaster = mat;
         return;
-    }
-
-    mat->load();
-    if (!mat->getBestTechnique())
-    {
-        // unsupported
-        mShadowTextureCustomCasterPass = 0;
-    }
-    else
-    {
-
-        mShadowTextureCustomCasterPass = mat->getBestTechnique()->getPass(0);
-        if (mShadowTextureCustomCasterPass->hasVertexProgram())
-        {
-            // Save vertex program and params in case we have to swap them out
-            mShadowTextureCustomCasterVertexProgram =
-                mShadowTextureCustomCasterPass->getVertexProgramName();
-            mShadowTextureCustomCasterVPParams =
-                mShadowTextureCustomCasterPass->getVertexProgramParameters();
-        }
-        if (mShadowTextureCustomCasterPass->hasFragmentProgram())
-        {
-            // Save fragment program and params in case we have to swap them out
-            mShadowTextureCustomCasterFragmentProgram =
-            mShadowTextureCustomCasterPass->getFragmentProgramName();
-            mShadowTextureCustomCasterFPParams =
-            mShadowTextureCustomCasterPass->getFragmentProgramParameters();
-        }
     }
 }
 //---------------------------------------------------------------------
 void SceneManager::ShadowRenderer::setShadowTextureReceiverMaterial(const MaterialPtr& mat)
 {
-    if(!mat) {
-        mShadowTextureCustomReceiverPass = 0;
-        return;
-    }
-
-    mat->load();
-    if (!mat->getBestTechnique())
+    mShadowTextureCustomReceiver = mat;
+    if (mat)
     {
-        // unsupported
-        mShadowTextureCustomReceiverPass = 0;
-    }
-    else
-    {
-
-        mShadowTextureCustomReceiverPass = mat->getBestTechnique()->getPass(0);
-        if (mShadowTextureCustomReceiverPass->hasVertexProgram())
-        {
-            // Save vertex program and params in case we have to swap them out
-            mShadowTextureCustomReceiverVertexProgram =
-                mShadowTextureCustomReceiverPass->getVertexProgramName();
-            mShadowTextureCustomReceiverVPParams =
-                mShadowTextureCustomReceiverPass->getVertexProgramParameters();
-        }
-        else
-        {
-            mShadowTextureCustomReceiverVertexProgram = BLANKSTRING;
-        }
-        if (mShadowTextureCustomReceiverPass->hasFragmentProgram())
-        {
-            // Save fragment program and params in case we have to swap them out
-            mShadowTextureCustomReceiverFragmentProgram =
-                mShadowTextureCustomReceiverPass->getFragmentProgramName();
-            mShadowTextureCustomReceiverFPParams =
-                mShadowTextureCustomReceiverPass->getFragmentProgramParameters();
-        }
-        else
-        {
-            mShadowTextureCustomReceiverFragmentProgram = BLANKSTRING;
-        }
+        mShadowTextureCustomReceiver->load();
     }
 }
 //---------------------------------------------------------------------
@@ -1633,16 +1576,19 @@ const Pass* SceneManager::ShadowRenderer::deriveShadowCasterPass(const Pass* pas
     if (mShadowTechnique & SHADOWDETAILTYPE_TEXTURE)
     {
         Pass* retPass;
-        if (pass->getParent()->getShadowCasterMaterial())
+        if (const auto& casterMat = pass->getParent()->getShadowCasterMaterial())
         {
-            return pass->getParent()->getShadowCasterMaterial()->getBestTechnique()->getPass(0);
+            return casterMat->getBestTechnique()->getPass(0);
+        }
+        else if (mShadowTextureCustomCaster)
+        {
+            mShadowTextureCustomCaster->load();
+            retPass = mShadowTextureCustomCaster->getBestTechnique()->getPass(0);
         }
         else
         {
-            retPass = mShadowTextureCustomCasterPass ?
-                mShadowTextureCustomCasterPass : mShadowCasterPlainBlackPass;
+            retPass = mShadowCasterPlainBlackPass;
         }
-
 
         // Special case alpha-blended passes
         if ((pass->getSourceBlendFactor() == SBF_SOURCE_ALPHA &&
@@ -1714,31 +1660,10 @@ const Pass* SceneManager::ShadowRenderer::deriveShadowCasterPass(const Pass* pas
                 pass->getShadowCasterVertexProgramParameters());
             // Also have to hack the light autoparams, that is done later
         }
-        else
+        else if (!mShadowTextureCustomCaster || retPass != mShadowTextureCustomCaster->getBestTechnique()->getPass(0))
         {
-            if (retPass == mShadowTextureCustomCasterPass)
-            {
-                // reset vp?
-                if (mShadowTextureCustomCasterPass->getVertexProgramName() !=
-                    mShadowTextureCustomCasterVertexProgram)
-                {
-                    mShadowTextureCustomCasterPass->setVertexProgram(
-                        mShadowTextureCustomCasterVertexProgram, false);
-                    if(mShadowTextureCustomCasterPass->hasVertexProgram())
-                    {
-                        mShadowTextureCustomCasterPass->setVertexProgramParameters(
-                            mShadowTextureCustomCasterVPParams);
-
-                    }
-
-                }
-
-            }
-            else
-            {
-                // Standard shadow caster pass, reset to no vp
-                retPass->setVertexProgram(BLANKSTRING);
-            }
+            // Standard shadow caster pass, reset to no vp
+            retPass->setVertexProgram(BLANKSTRING);
         }
 
         if (!pass->getShadowCasterFragmentProgramName().empty())
@@ -1755,34 +1680,14 @@ const Pass* SceneManager::ShadowRenderer::deriveShadowCasterPass(const Pass* pas
                                                 pass->getShadowCasterFragmentProgramParameters());
             // Also have to hack the light autoparams, that is done later
         }
-        else
+        else if (!mShadowTextureCustomCaster || retPass != mShadowTextureCustomCaster->getBestTechnique()->getPass(0))
         {
-            if (retPass == mShadowTextureCustomCasterPass)
-            {
-                // reset fp?
-                if (mShadowTextureCustomCasterPass->getFragmentProgramName() !=
-                    mShadowTextureCustomCasterFragmentProgram)
-                {
-                    mShadowTextureCustomCasterPass->setFragmentProgram(
-                                                                     mShadowTextureCustomCasterFragmentProgram, false);
-                    if(mShadowTextureCustomCasterPass->hasFragmentProgram())
-                    {
-                        mShadowTextureCustomCasterPass->setFragmentProgramParameters(
-                                                                                   mShadowTextureCustomCasterFPParams);
-                    }
-                }
-            }
-            else
-            {
-                // Standard shadow caster pass, reset to no fp
-                retPass->setFragmentProgram(BLANKSTRING);
-            }
+            // Standard shadow caster pass, reset to no fp
+            retPass->setFragmentProgram(BLANKSTRING);
         }
 
-        // handle the case where there is no fixed pipeline support
-        if( retPass->getParent()->getParent()->getCompilationRequired() )
-            retPass->getParent()->getParent()->compile();
-
+        // ensure best technique is up to date
+        retPass->getParent()->getParent()->load();
         Technique* btech = retPass->getParent()->getParent()->getBestTechnique();
         if( btech )
         {
@@ -1808,8 +1713,15 @@ const Pass* SceneManager::ShadowRenderer::deriveShadowReceiverPass(const Pass* p
         {
             return retPass = pass->getParent()->getShadowReceiverMaterial()->getBestTechnique()->getPass(0);
         }
-
-        retPass = mShadowTextureCustomReceiverPass ? mShadowTextureCustomReceiverPass : mShadowReceiverPass;
+        else if (mShadowTextureCustomReceiver)
+        {
+            mShadowTextureCustomReceiver->load();
+            retPass = mShadowTextureCustomReceiver->getBestTechnique()->getPass(0);
+        }
+        else
+        {
+            retPass = mShadowReceiverPass;
+        }
 
         // Does incoming pass have a custom shadow receiver program?
         if (!pass->getShadowReceiverVertexProgramName().empty())
@@ -1826,31 +1738,10 @@ const Pass* SceneManager::ShadowRenderer::deriveShadowReceiverPass(const Pass* p
                 pass->getShadowReceiverVertexProgramParameters());
             // Also have to hack the light autoparams, that is done later
         }
-        else
+        else if (!mShadowTextureCustomReceiver || retPass != mShadowTextureCustomReceiver->getBestTechnique()->getPass(0))
         {
-            if (mShadowTextureCustomReceiverPass && retPass == mShadowTextureCustomReceiverPass)
-            {
-                // reset vp?
-                if (mShadowTextureCustomReceiverPass->getVertexProgramName() !=
-                    mShadowTextureCustomReceiverVertexProgram)
-                {
-                    mShadowTextureCustomReceiverPass->setVertexProgram(
-                        mShadowTextureCustomReceiverVertexProgram, false);
-                    if(mShadowTextureCustomReceiverPass->hasVertexProgram())
-                    {
-                        mShadowTextureCustomReceiverPass->setVertexProgramParameters(
-                            mShadowTextureCustomReceiverVPParams);
-
-                    }
-
-                }
-
-            }
-            else
-            {
-                // Standard shadow receiver pass, reset to no vp
-                retPass->setVertexProgram(BLANKSTRING);
-            }
+            // Standard shadow caster pass, reset to no vp
+            retPass->setVertexProgram(BLANKSTRING);
         }
 
         unsigned short keepTUCount;
@@ -1928,33 +1819,10 @@ const Pass* SceneManager::ShadowRenderer::deriveShadowReceiverPass(const Pass* p
 
             }
         }
-        else
+        else if (!mShadowTextureCustomReceiver || retPass != mShadowTextureCustomReceiver->getBestTechnique()->getPass(0))
         {
-            // Reset any merged fragment programs from last time
-            if (retPass == mShadowTextureCustomReceiverPass)
-            {
-                // reset fp?
-                if (mShadowTextureCustomReceiverPass->getFragmentProgramName() !=
-                    mShadowTextureCustomReceiverFragmentProgram)
-                {
-                    mShadowTextureCustomReceiverPass->setFragmentProgram(
-                        mShadowTextureCustomReceiverFragmentProgram, false);
-                    if(mShadowTextureCustomReceiverPass->hasFragmentProgram())
-                    {
-                        mShadowTextureCustomReceiverPass->setFragmentProgramParameters(
-                            mShadowTextureCustomReceiverFPParams);
-
-                    }
-
-                }
-
-            }
-            else
-            {
-                // Standard shadow receiver pass, reset to no fp
-                retPass->setFragmentProgram(BLANKSTRING);
-            }
-
+            // Standard shadow caster pass, reset to no vp
+            retPass->setFragmentProgram(BLANKSTRING);
         }
 
         // Remove any extra texture units
@@ -1963,12 +1831,8 @@ const Pass* SceneManager::ShadowRenderer::deriveShadowReceiverPass(const Pass* p
             retPass->removeTextureUnitState(keepTUCount);
         }
 
-        retPass->_load();
-
-        // handle the case where there is no fixed pipeline support
-        if( retPass->getParent()->getParent()->getCompilationRequired() )
-            retPass->getParent()->getParent()->compile();
-
+        // ensure best technique is up to date
+        retPass->getParent()->getParent()->load();
         Technique* btech = retPass->getParent()->getParent()->getBestTechnique();
         if( btech )
         {
