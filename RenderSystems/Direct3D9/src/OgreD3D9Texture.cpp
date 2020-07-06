@@ -38,6 +38,7 @@ THE SOFTWARE.
 #include "OgreD3D9Device.h"
 #include "OgreD3D9DeviceManager.h"
 #include "OgreD3D9ResourceManager.h"
+#include "OgreD3D9DepthBuffer.h"
 
 namespace Ogre 
 {
@@ -481,6 +482,11 @@ namespace Ogre
         else
             textureResources = allocateTextureResources(d3d9Device);
 
+        if(PixelUtil::isDepth(mFormat))
+        {
+            usage = D3DUSAGE_DEPTHSTENCIL;
+            mD3DPool = D3DPOOL_DEFAULT;
+        }
 
         // create the texture
         hr = D3DXCreateTexture( 
@@ -1395,6 +1401,27 @@ namespace Ogre
         mName = name;
         mHwGamma = writeGamma;
         mFSAA = fsaa;       
+
+        if(!PixelUtil::isDepth(buffer->getFormat()))
+            return;
+
+        //Create the depthstencil surface
+        D3D9RenderSystem* rs = (D3D9RenderSystem*)Root::getSingleton().getRenderSystem();
+        IDirect3DDevice9* activeDevice = rs->getActiveD3D9Device();
+
+        IDirect3DSurface9 *depthBufferSurface = static_cast<D3D9HardwarePixelBuffer*>(mBuffer)->getSurface(activeDevice);
+        D3DSURFACE_DESC srfDesc;
+        if( FAILED(depthBufferSurface->GetDesc(&srfDesc)) )
+        {
+            OGRE_EXCEPT( Exception::ERR_RENDERINGAPI_ERROR,
+                     "Failed to retrieve Surface Description from BackBuffer.");
+        }
+
+        mDepthBuffer = OGRE_NEW D3D9DepthBuffer( DepthBuffer::POOL_NO_DEPTH, rs,
+                                                activeDevice, depthBufferSurface,
+                                                srfDesc.Format, srfDesc.Width, srfDesc.Height,
+                                                srfDesc.MultiSampleType, srfDesc.MultiSampleQuality, true );
+        mDepthBuffer->_notifyRenderTargetAttached(this);
     }
     //---------------------------------------------------------------------
     void D3D9RenderTexture::update(bool swap)
@@ -1427,6 +1454,9 @@ namespace Ogre
     {
         if(name == "DDBACKBUFFER")
         {
+            if(PixelUtil::isDepth(mBuffer->getFormat()))
+                return;
+
             if (mFSAA > 0)
             {
                 // rendering to AA surface

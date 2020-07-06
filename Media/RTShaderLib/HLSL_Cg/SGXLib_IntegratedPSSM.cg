@@ -10,7 +10,7 @@ static float3 pssm_lod_info = float3(0, 0, 0);
 #endif
 
 #ifdef PSSM_SAMPLE_CMP
-#define SAMPLER_TYPE Sampler2DShadow
+#define SAMPLER_TYPE sampler2D //Sampler2DShadow
 #else
 #define SAMPLER_TYPE sampler2D
 #endif
@@ -31,7 +31,7 @@ void SGX_ApplyShadowFactor_Diffuse(in float4 ambient,
 float sampleDepth(in SAMPLER_TYPE shadowMap, float2 uv, float depth)
 {
 #ifdef PSSM_SAMPLE_CMP
-    return tex2Dcmp(shadowMap, float3(uv, depth));
+    return tex2Dproj(shadowMap, float4(uv, depth, 1.0)).r;
 #else
 	return (depth <= tex2D(shadowMap, uv).r) ? 1.0 : 0.0;
 #endif

@@ -87,6 +87,8 @@ float tex2Dcmp(Sampler2DShadow s, float3 v) { return s.t.SampleCmpLevelZero(s.s,
 float4 tex2DARRAY(Sampler2DArray s, float3 v) { return s.t.Sample(s.s, v); }
 #else
 
+#define SAMPLER2DSHADOW(name, reg) sampler2D name : register(s ## reg)
+
 #define SAMPLER1D(name, reg) sampler1D name : register(s ## reg)
 #define SAMPLER2D(name, reg) sampler2D name : register(s ## reg)
 #define SAMPLER3D(name, reg) sampler3D name : register(s ## reg)

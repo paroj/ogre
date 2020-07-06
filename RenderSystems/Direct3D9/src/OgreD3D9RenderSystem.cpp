@@ -2924,8 +2924,6 @@ namespace Ogre
             IDirect3DSurface9* pBack[OGRE_MAX_MULTIPLE_RENDER_TARGETS];
             memset(pBack, 0, sizeof(pBack));
             target->getCustomAttribute( "DDBACKBUFFER", &pBack );
-            if (!pBack[0])
-                return;
 
             IDirect3DDevice9* activeDevice = getActiveD3D9Device();
             D3D9DepthBuffer *depthBuffer = static_cast<D3D9DepthBuffer*>(target->getDepthBuffer());
@@ -3012,7 +3010,7 @@ namespace Ogre
                     }
                 }
 			}
-			hr = activeDevice->SetDepthStencilSurface( depthSurface );
+            hr = activeDevice->SetDepthStencilSurface( depthSurface );
 			if (FAILED(hr))
 			{
 				String msg = DXGetErrorDescription(hr);
@@ -3722,8 +3720,13 @@ namespace Ogre
     void D3D9RenderSystem::clearFrameBuffer(unsigned int buffers, 
         const ColourValue& colour, Real depth, unsigned short stencil)
     {
+        // Retrieve render surfaces (up to OGRE_MAX_MULTIPLE_RENDER_TARGETS)
+        IDirect3DSurface9* pBack[OGRE_MAX_MULTIPLE_RENDER_TARGETS];
+        memset(pBack, 0, sizeof(pBack));
+        mActiveRenderTarget->getCustomAttribute( "DDBACKBUFFER", &pBack );
+
         DWORD flags = 0;
-        if (buffers & FBT_COLOUR)
+        if ((buffers & FBT_COLOUR) && pBack[0])
         {
             flags |= D3DCLEAR_TARGET;
         }
