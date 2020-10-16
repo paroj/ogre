@@ -427,15 +427,9 @@ namespace Ogre {
     //-----------------------------------------------------------------------
     void ParticleSystem::_expire(Real timeElapsed)
     {
-        ActiveParticleList::iterator i, itEnd;
-        Particle* pParticle;
-        ParticleEmitter* pParticleEmitter;
-
-        itEnd = mActiveParticles.end();
-
-        for (i = mActiveParticles.begin(); i != itEnd; )
+        for (auto i = mActiveParticles.begin(); i != mActiveParticles.end(); )
         {
-            pParticle = static_cast<Particle*>(*i);
+            auto pParticle = *i;
             if (pParticle->mTimeToLive < timeElapsed)
             {
                 // Notify renderer
@@ -445,21 +439,21 @@ namespace Ogre {
                 if (pParticle->mParticleType == Particle::Visual)
                 {
                     // Destroy this one
-                    mFreeParticles.splice(mFreeParticles.end(), mActiveParticles, i++);
+                    mFreeParticles.push_back(*i);
                 }
                 else
                 {
                     // For now, it can only be an emitted emitter
-                    pParticleEmitter = static_cast<ParticleEmitter*>(*i);
+                    auto pParticleEmitter = static_cast<ParticleEmitter*>(*i);
                     std::list<ParticleEmitter*>* fee = findFreeEmittedEmitter(pParticleEmitter->getName());
                     fee->push_back(pParticleEmitter);
 
                     // Also erase from mActiveEmittedEmitters
                     removeFromActiveEmittedEmitters (pParticleEmitter);
-
-                    // And erase from mActiveParticles
-                    i = mActiveParticles.erase( i );
                 }
+                // we move end() insted of i
+                std::swap(*i, mActiveParticles.back());
+                mActiveParticles.pop_back();
             }
             else
             {
@@ -555,12 +549,14 @@ namespace Ogre {
 
         Real timeInc = timeElapsed / requested;
 
+        String  emitterName = emitter->getEmittedEmitter();
+
         for (unsigned int j = 0; j < requested; ++j)
         {
             // Create a new particle & init using emitter
             // The particle is a visual particle if the emit_emitter property of the emitter isn't set 
             Particle* p = 0;
-            String  emitterName = emitter->getEmittedEmitter();
+
             if (emitterName.empty())
                 p = createParticle();
             else
@@ -641,8 +637,9 @@ namespace Ogre {
         if (!mFreeParticles.empty())
         {
             // Fast creation (don't use superclass since emitter will init)
-            p = mFreeParticles.front();
-            mActiveParticles.splice(mActiveParticles.end(), mFreeParticles, mFreeParticles.begin());
+            p = mFreeParticles.back();
+            mActiveParticles.push_back(p);
+            mFreeParticles.pop_back();
         }
 
         return p;
