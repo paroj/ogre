@@ -913,65 +913,35 @@ namespace Ogre {
         }
         else if (bb.mRotation == Radian(0))
         {
+            struct QuadVertex {
+                Vector3 pos;
+                RGBA col;
+                Vector2 tex;
+            } quad[4];
+            static_assert(sizeof(quad) == 6*4*4, "unexpected alignment");
+
             // Left-top
-            // Positions
-            *mLockPtr++ = offsets[0].x + bb.mPosition.x;
-            *mLockPtr++ = offsets[0].y + bb.mPosition.y;
-            *mLockPtr++ = offsets[0].z + bb.mPosition.z;
-            // Colour
-            // Convert float* to RGBA*
-            pCol = static_cast<RGBA*>(static_cast<void*>(mLockPtr));
-            *pCol++ = colour;
-            // Update lock pointer
-            mLockPtr = static_cast<float*>(static_cast<void*>(pCol));
-            // Texture coords
-            *mLockPtr++ = r.left;
-            *mLockPtr++ = r.top;
+            quad[0].pos = offsets[0] + bb.mPosition;
+            quad[0].col = bb.mColour;
+            quad[0].tex = Vector2(r.left, r.top);
 
             // Right-top
-            // Positions
-            *mLockPtr++ = offsets[1].x + bb.mPosition.x;
-            *mLockPtr++ = offsets[1].y + bb.mPosition.y;
-            *mLockPtr++ = offsets[1].z + bb.mPosition.z;
-            // Colour
-            // Convert float* to RGBA*
-            pCol = static_cast<RGBA*>(static_cast<void*>(mLockPtr));
-            *pCol++ = colour;
-            // Update lock pointer
-            mLockPtr = static_cast<float*>(static_cast<void*>(pCol));
-            // Texture coords
-            *mLockPtr++ = r.right;
-            *mLockPtr++ = r.top;
+            quad[1].pos = offsets[1] + bb.mPosition;
+            quad[1].col = bb.mColour;
+            quad[1].tex = Vector2(r.right, r.top);
 
             // Left-bottom
-            // Positions
-            *mLockPtr++ = offsets[2].x + bb.mPosition.x;
-            *mLockPtr++ = offsets[2].y + bb.mPosition.y;
-            *mLockPtr++ = offsets[2].z + bb.mPosition.z;
-            // Colour
-            // Convert float* to RGBA*
-            pCol = static_cast<RGBA*>(static_cast<void*>(mLockPtr));
-            *pCol++ = colour;
-            // Update lock pointer
-            mLockPtr = static_cast<float*>(static_cast<void*>(pCol));
-            // Texture coords
-            *mLockPtr++ = r.left;
-            *mLockPtr++ = r.bottom;
+            quad[2].pos = offsets[2] + bb.mPosition;
+            quad[2].col = bb.mColour;
+            quad[2].tex = Vector2(r.left, r.bottom);
 
             // Right-bottom
-            // Positions
-            *mLockPtr++ = offsets[3].x + bb.mPosition.x;
-            *mLockPtr++ = offsets[3].y + bb.mPosition.y;
-            *mLockPtr++ = offsets[3].z + bb.mPosition.z;
-            // Colour
-            // Convert float* to RGBA*
-            pCol = static_cast<RGBA*>(static_cast<void*>(mLockPtr));
-            *pCol++ = colour;
-            // Update lock pointer
-            mLockPtr = static_cast<float*>(static_cast<void*>(pCol));
-            // Texture coords
-            *mLockPtr++ = r.right;
-            *mLockPtr++ = r.bottom;
+            quad[3].pos = offsets[3] + bb.mPosition;
+            quad[3].col = bb.mColour;
+            quad[3].tex = Vector2(r.right, r.bottom);
+
+            memcpy(mLockPtr, quad, sizeof(quad));
+            mLockPtr += sizeof(quad)/4;
         }
         else if (mRotationType == BBR_VERTEX)
         {
