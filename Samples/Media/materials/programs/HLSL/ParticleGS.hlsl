@@ -32,7 +32,7 @@ struct VSParticleIn
 
 struct VSParticleDrawOut
 {
-    float3 pos : POSITION;
+    float4 pos : POSITION;
 	float4 color : COLOR0;
 	float radius : TEXCOORD0;
 };
@@ -241,13 +241,15 @@ void GenerateParticles_GS(point VSParticleIn input[1], inout PointStream<VSParti
 }
 
 //The vertex shader that prepares the fireworks for display
-VSParticleDrawOut DisplayParticles_VS(VSParticleIn input)
+VSParticleDrawOut DisplayParticles_VS(VSParticleIn input,
+                                        uniform float4x4 worldView,
+                                        uniform float4x4 proj)
 {
 	VSParticleDrawOut output;
     //
     // Pass the point through
     //
-    output.pos = input.pos; //Multiply by world matrix?
+    output.pos = mul(worldView, float4(input.pos,1));
     output.radius = 1.5;
     
     //  
@@ -281,18 +283,21 @@ VSParticleDrawOut DisplayParticles_VS(VSParticleIn input)
     {
         output.color = float4(0,0,0,0);
     }
-       
+
+    float4 tmp = mul(proj, float4(output.radius, 0, output.pos.z, 1));
+    output.radius = tmp.x; // no w divison here, no viewport notmalization in GS
+    output.pos = mul(proj, output.pos);
+
     return output;
 }
 
 //The geometry shader that prepares the fireworks for display
 [maxvertexcount(4)]
 void DisplayParticles_GS( point VSParticleDrawOut input[1]
-						, uniform float4x4 inverseView
-						, uniform float4x4 worldViewProj
+						, uniform float4 vpsize
 						, inout TriangleStream<PSSceneIn> SpriteStream)
 {
-	float3 g_positions[4] = { float3( -1, 1, 0 ), float3( -1, -1, 0 ), float3( 1, 1, 0 ), float3( 1, -1, 0 ) };
+	float2 g_positions[4] = { float2( -1, 1 ), float2( -1, -1 ), float2( 1, 1 ), float2( 1, -1 ) };
     float2 g_texcoords[4] = { float2(0,1), float2(1,1), float2(0,0), float2(1,0) };
 
 	 PSSceneIn output;
@@ -302,9 +307,8 @@ void DisplayParticles_GS( point VSParticleDrawOut input[1]
     //
     for(int i=0; i<4; i++)
     {
-		float3 position = -g_positions[i]*input[0].radius;
-        position = mul( (float3x3)inverseView, position ) + input[0].pos.xyz;
-        output.pos = mul( worldViewProj, float4(position,1.0) );
+        float2 aradius = float2(1, vpsize.x/vpsize.y)*input[0].radius;
+        output.pos = input[0].pos - float4(g_positions[i]*aradius, 0, 0);
 		output.tex = g_texcoords[i];
 		output.color = input[0].color;
 		SpriteStream.Append(output);

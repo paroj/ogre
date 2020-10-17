@@ -230,7 +230,7 @@ void GenerateParticles_GS(
 
 struct ColoredFirework
 {
-	float3 	pos : POSITION;
+	float4 	pos : POSITION;
     float4 	color : COLOR;
 	float	radius : TEXCOORD0;
 };
@@ -241,17 +241,18 @@ ColoredFirework DisplayParticles_VS
     in float3 		inPos : POSITION,
 	in float 		inTimer : TEXCOORD0,
 	in float 		inType : TEXCOORD1,
-	in float3 		inVelocity : TEXCOORD2
+	in float3 		inVelocity : TEXCOORD2,
 	
 
-    //uniform float4x4 worldViewProj
+    uniform float4x4 worldView,
+    uniform float4x4 proj
 )
 {
 	ColoredFirework output;
     //
     // Pass the point through
     //
-    output.pos = inPos; //Multiply by world matrix?
+    output.pos = mul(worldView, float4(inPos,1));
     output.radius = 1.5;
     
     //  
@@ -281,22 +282,25 @@ ColoredFirework DisplayParticles_VS
         output.color = float4(1,0.1,0.1,1);
         output.color *= (inTimer / P_EMBER3LIFE );
     }
-    
+
+    float4 tmp = mul(proj, float4(output.radius, 0, output.pos.z, 1));
+    output.radius = tmp.x; // no w divison here, no viewport notmalization in GS
+    output.pos = mul(proj, output.pos);
+
     return output;
 }
 
 //The geometry shader that prepares the fireworks for display
 POINT 
 TRIANGLE_OUT 
-void DisplayParticles_GS( AttribArray<float3> Pos : POSITION,
+void DisplayParticles_GS( AttribArray<float4> Pos : POSITION,
 							AttribArray<float4> Color : COLOR,
 							AttribArray<float> Radius : TEXCOORD0,
-							
-							uniform float4x4 inverseView,
-							uniform float4x4 worldViewProj)
+
+							uniform float4 vpsize)
 {
 	//float3 g_positions[4] = { float3( -1, 1, 0 ), float3( 1, 1, 0 ), float3( -1, -1, 0 ), float3( 1, -1, 0 ) };
-	float3 g_positions[4] = { float3( -1, 1, 0 ), float3( -1, -1, 0 ), float3( 1, 1, 0 ), float3( 1, -1, 0 ) };
+	float2 g_positions[4] = { float2( -1, 1 ), float2( -1, -1 ), float2( 1, 1 ), float2( 1, -1 ) };
     float2 g_texcoords[4] = { float2(0,1), float2(1,1), float2(0,0), float2(1,0) };
 	
 	
@@ -305,11 +309,9 @@ void DisplayParticles_GS( AttribArray<float3> Pos : POSITION,
     //
     for(int i=0; i<4; i++)
     {
-		float3 position = -g_positions[i]*Radius[0];
-        position = mul( (float3x3)inverseView, position ) + Pos[0];
-        float4 outPos = mul( worldViewProj, float4(position,1.0) );
-        
-        emitVertex(outPos : POSITION, Color[0] : COLOR0, g_texcoords[i] : TEXCOORD0);
+        float2 aradius = float2(1, vpsize.x/vpsize.y)*Radius[0];
+		float4 position = Pos[0] - float4(g_positions[i]*aradius, 0, 0);
+        emitVertex(position : POSITION, Color[0] : COLOR0, g_texcoords[i] : TEXCOORD0);
     }
     restartStrip();
 }
