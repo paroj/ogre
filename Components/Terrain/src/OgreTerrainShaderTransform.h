@@ -32,6 +32,32 @@ private:
     RTShader::UniformParameterPtr mBaseUVScale;
 };
 
+class TerrainSurface : public RTShader::SubRenderState
+{
+public:
+    const String& getType() const { return Type; }
+    int getExecutionOrder() const { return RTShader::FFP_LIGHTING - 1; }
+    void copyFrom(const SubRenderState& rhs) {}
+    bool createCpuSubPrograms(RTShader::ProgramSet* programSet);
+    bool preAddToRenderState(const RTShader::RenderState* renderState, Pass* srcPass, Pass* dstPass);
+    void updateGpuProgramsParams(Renderable* rend, const Pass* pass, const AutoParamDataSource* source, const LightList* pLightList);
+
+    static String Type;
+protected:
+    const Terrain* mParent;
+    RTShader::UniformParameterPtr mUVMul;
+    bool mUseSpecularMapping;
+};
+
+class TerrainSurfaceFactory : public RTShader::SubRenderStateFactory
+{
+public:
+    const String& getType() const;
+
+protected:
+    RTShader::SubRenderState* createInstanceImpl();
+};
+
 class TerrainTransformFactory : public RTShader::SubRenderStateFactory
 {
 public:

@@ -236,6 +236,16 @@ namespace Ogre
     //---------------------------------------------------------------------
     MaterialPtr TerrainMaterialGeneratorA::SM2Profile::generate(const Terrain* terrain)
     {
+        using namespace RTShader;
+        static SubRenderStateFactory* factory = nullptr;
+        if(!factory)
+        {
+            factory = new TerrainTransformFactory;
+            ShaderGenerator::getSingleton().addSubRenderStateFactory(factory);
+            factory = new TerrainSurfaceFactory;
+            ShaderGenerator::getSingleton().addSubRenderStateFactory(factory);
+        }
+
         // re-use old material if exists
         MaterialPtr mat = terrain->_getMaterial();
         if (!mat)
@@ -262,30 +272,53 @@ namespace Ogre
             setLayerParallaxMappingEnabled(false);
         }
 
+        Pass* pass;
+#if 1
+        pass = mat->createTechnique()->createPass();
+        pass->getUserObjectBindings().setUserAny("Terrain", terrain);
+        pass->setShininess(32); // user param
+
+        auto mainRenderState = std::make_shared<TargetRenderState>();
+        //mainRenderState->setLightCount(ShaderGenerator::getSingleton().getRenderState(ShaderGenerator::DEFAULT_SCHEME_NAME)->getLightCount());
+        mainRenderState->setLightCount(Vector3i(0, 1, 0));
+
+        try
+        {
+            mainRenderState->link({"TerrainTransform", "TerrainSurface", "SGX_PerPixelLighting", "FFP_Fog"}, pass, pass);
+            if(isShadowingEnabled(HIGH_LOD, terrain))
+            {
+                auto pssm = ShaderGenerator::getSingleton().createSubRenderState<IntegratedPSSM3>();
+                pssm->setSplitPoints(mPSSM->getSplitPoints());
+                pssm->preAddToRenderState(mainRenderState.get(), pass, pass);
+                mainRenderState->addSubRenderStateInstance(pssm);
+            }
+            mainRenderState->acquirePrograms(pass);
+        }
+        catch(const std::exception& e)
+        {
+            LogManager::getSingleton().logError(e.what());
+            return nullptr;
+        }
+
+        pass->getUserObjectBindings().setUserAny(TargetRenderState::UserKey, mainRenderState);
+#else
         addTechnique(mat, terrain, HIGH_LOD);
         updateParams(mat, terrain);
+#endif
 
         // LOD
         if(mCompositeMapEnabled)
         {
-            static TerrainTransformFactory* factory = nullptr;
-            if(!factory)
-            {
-                factory = new TerrainTransformFactory;
-                RTShader::ShaderGenerator::getSingleton().addSubRenderStateFactory(factory);
-            }
-
             Technique* tech = mat->createTechnique();
             tech->setLodIndex(1);
 
-            Pass* pass = tech->createPass();
+            pass = tech->createPass();
             TextureUnitState* tu = pass->createTextureUnitState();
             tu->setTexture(terrain->getCompositeMap());
             tu->setTextureAddressingMode(TAM_CLAMP);
 
             pass->getUserObjectBindings().setUserAny("Terrain", terrain);
 
-            using namespace RTShader;
             auto lod1RenderState = std::make_shared<TargetRenderState>();
             try
             {
