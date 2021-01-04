@@ -30,33 +30,27 @@ THE SOFTWARE.
 
 #include "OgreVulkanTextureGpuManager.h"
 #include "OgreVulkanWindow.h"
-
-#include "OgreTextureBox.h"
-#include "OgreTextureGpuListener.h"
-#include "OgreVector2.h"
-#include "OgreWindow.h"
-
-#include "Vao/OgreVaoManager.h"
+#include "OgreVector.h"
 
 #include "OgreException.h"
 
 namespace Ogre
 {
-    extern const IdString CustomAttributeIdString_GLCONTEXT;
+    extern const String CustomAttributeIdString_GLCONTEXT;
 
     VulkanTextureGpuWindow::VulkanTextureGpuWindow(
-        GpuPageOutStrategy::GpuPageOutStrategy pageOutStrategy, VaoManager *vaoManager, IdString name,
-        uint32 textureFlags, TextureTypes::TextureTypes initialType, TextureGpuManager *textureManager,
+        GpuPageOutStrategy pageOutStrategy, VaoManager *vaoManager, String name,
+        uint32 textureFlags, TextureType initialType, VulkanTextureGpuManager *textureManager,
         VulkanWindow *window ) :
         VulkanTextureGpuRenderTarget( pageOutStrategy, vaoManager, name, textureFlags, initialType,
                                       textureManager ),
         mWindow( window ),
         mCurrentSwapchainIdx( 0u )
     {
-        mTextureType = TextureTypes::Type2D;
+        mTextureType = TEX_TYPE_2D;
     }
     //-----------------------------------------------------------------------------------
-    VulkanTextureGpuWindow::~VulkanTextureGpuWindow() { destroyInternalResourcesImpl(); }
+    VulkanTextureGpuWindow::~VulkanTextureGpuWindow() { freeInternalResourcesImpl(); }
     //-----------------------------------------------------------------------------------
     VkSemaphore VulkanTextureGpuWindow::getImageAcquiredSemaphore( void )
     {
@@ -81,36 +75,23 @@ namespace Ogre
     //-----------------------------------------------------------------------------------
     void VulkanTextureGpuWindow::createInternalResourcesImpl( void )
     {
-        if( mSampleDescription.isMultisample() )
+        if( mFSAA > 0 )
             createMsaaSurface();
     }
     //-----------------------------------------------------------------------------------
-    void VulkanTextureGpuWindow::destroyInternalResourcesImpl( void )
+    void VulkanTextureGpuWindow::freeInternalResourcesImpl( void )
     {
         mFinalTextureName = 0;
         destroyMsaaSurface();
     }
     //-----------------------------------------------------------------------------------
-    void VulkanTextureGpuWindow::notifyDataIsReady( void )
-    {
-        assert( mResidencyStatus == GpuResidency::Resident );
-        notifyAllListenersTextureChanged( TextureGpuListener::ReadyForRendering );
-    }
-    //-----------------------------------------------------------------------------------
-    bool VulkanTextureGpuWindow::_isDataReadyImpl( void ) const
-    {
-        return mResidencyStatus == GpuResidency::Resident;
-    }
-    //-----------------------------------------------------------------------------------
     void VulkanTextureGpuWindow::swapBuffers( void ) { mWindow->swapBuffers(); }
     //-----------------------------------------------------------------------------------
-    void VulkanTextureGpuWindow::getCustomAttribute( IdString name, void *pData )
+    void VulkanTextureGpuWindow::getCustomAttribute( String name, void *pData )
     {
-        if( name == "Window" )
-            *static_cast<Window **>( pData ) = mWindow;
+        //if( name == "Window" )
+        //    *static_cast<Window **>( pData ) = mWindow;
     }
-    //-----------------------------------------------------------------------------------
-    bool VulkanTextureGpuWindow::isOpenGLRenderWindow( void ) const { return true; }
     //-----------------------------------------------------------------------------------
     void VulkanTextureGpuWindow::_setToDisplayDummyTexture( void ) {}
     //-----------------------------------------------------------------------------------
@@ -120,7 +101,7 @@ namespace Ogre
                      "VulkanTextureGpuWindow::_notifyTextureSlotChanged" );
     }
     //-----------------------------------------------------------------------------------
-    void VulkanTextureGpuWindow::setTextureType( TextureTypes::TextureTypes textureType )
+    void VulkanTextureGpuWindow::setTextureType( TextureType textureType )
     {
         OGRE_EXCEPT( Exception::ERR_INVALID_CALL,
                      "You cannot call setTextureType if isRenderWindowSpecific is true",
@@ -129,8 +110,8 @@ namespace Ogre
     //-----------------------------------------------------------------------------------
     void VulkanTextureGpuWindow::getSubsampleLocations( vector<Vector2>::type locations )
     {
-        locations.reserve( mSampleDescription.getColourSamples() );
-        if( mSampleDescription.getColourSamples() <= 1u )
+        locations.reserve( mFSAA );
+        if( mFSAA <= 1u )
         {
             locations.push_back( Vector2( 0.0f, 0.0f ) );
         }

@@ -30,7 +30,6 @@ THE SOFTWARE.
 
 #include "OgreVulkanPrerequisites.h"
 
-#include "OgreRootLayout.h"
 #include "OgreVulkanProgram.h"
 
 struct VkDescriptorSetLayoutBinding;
@@ -56,7 +55,7 @@ namespace Ogre
 {
     uint32 toVkDescriptorType( DescBindingTypes::DescBindingTypes type );
 
-    class _OgreVulkanExport VulkanRootLayout : protected RootLayout, public ResourceAlloc
+    class _OgreVulkanExport VulkanRootLayout
     {
         /// One handle per binding set (up to OGRE_VULKAN_MAX_NUM_BOUND_DESCRIPTOR_SETS)
         /// Doesn't have gaps (e.g. if mDescBindingRanges[3] is not empty, then mSets[3] must exist)
@@ -106,9 +105,9 @@ namespace Ogre
         VulkanRootLayout( VulkanGpuProgramManager *programManager );
         ~VulkanRootLayout();
 
-        using RootLayout::dump;
-        using RootLayout::findParamsBuffer;
-        using RootLayout::getDescBindingRanges;
+        //using RootLayout::dump;
+        //using RootLayout::findParamsBuffer;
+        //using RootLayout::getDescBindingRanges;
 
         /// @copydoc VulkanRootLayout::copyFrom
         void copyFrom( const RootLayout &rootLayout );
@@ -150,8 +149,7 @@ namespace Ogre
         @param inOutString [in/out]
             String to output our macros
         */
-        void generateRootLayoutMacros( uint32 shaderStage, ShaderSyntax shaderType,
-                                       String &inOutString ) const;
+        void generateRootLayoutMacros(uint32 shaderStage, String& inOutString) const;
 
         /** Creates most of our Vulkan handles required to build a PSO.
 
@@ -184,7 +182,7 @@ namespace Ogre
 
         const DescBindingRange *getDescBindingRanges( size_t setIdx ) const
         {
-            return mDescBindingRanges[setIdx];
+            //return mDescBindingRanges[setIdx];
         }
 
         bool operator<( const VulkanRootLayout &other ) const;

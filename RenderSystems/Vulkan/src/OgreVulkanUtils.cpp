@@ -108,7 +108,7 @@ namespace Ogre
         }
     }
 
-    PixelFormatGpu findSupportedFormat( VkPhysicalDevice physicalDevice,
+    PixelFormat findSupportedFormat( VkPhysicalDevice physicalDevice,
                                         const FastArray<PixelFormatGpu> &candidates,
                                         VkImageTiling tiling, VkFormatFeatureFlags features )
     {
@@ -153,57 +153,6 @@ namespace Ogre
 
         OGRE_EXCEPT( Exception::ERR_RENDERINGAPI_ERROR, "failed to find suitable memory type!",
                      "findMemoryType" );
-    }
-    //-------------------------------------------------------------------------
-    String getSpirvReflectError( SpvReflectResult spirvReflectResult )
-    {
-        switch( spirvReflectResult )
-        {
-        case SPV_REFLECT_RESULT_SUCCESS:
-            return "SPV_REFLECT_RESULT_SUCCESS";
-        case SPV_REFLECT_RESULT_NOT_READY:
-            return "SPV_REFLECT_RESULT_NOT_READY";
-        case SPV_REFLECT_RESULT_ERROR_PARSE_FAILED:
-            return "SPV_REFLECT_RESULT_ERROR_PARSE_FAILED";
-        case SPV_REFLECT_RESULT_ERROR_ALLOC_FAILED:
-            return "SPV_REFLECT_RESULT_ERROR_ALLOC_FAILED";
-        case SPV_REFLECT_RESULT_ERROR_RANGE_EXCEEDED:
-            return "SPV_REFLECT_RESULT_ERROR_RANGE_EXCEEDED";
-        case SPV_REFLECT_RESULT_ERROR_NULL_POINTER:
-            return "SPV_REFLECT_RESULT_ERROR_NULL_POINTER";
-        case SPV_REFLECT_RESULT_ERROR_INTERNAL_ERROR:
-            return "SPV_REFLECT_RESULT_ERROR_INTERNAL_ERROR";
-        case SPV_REFLECT_RESULT_ERROR_COUNT_MISMATCH:
-            return "SPV_REFLECT_RESULT_ERROR_COUNT_MISMATCH";
-        case SPV_REFLECT_RESULT_ERROR_ELEMENT_NOT_FOUND:
-            return "SPV_REFLECT_RESULT_ERROR_ELEMENT_NOT_FOUND";
-        case SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_CODE_SIZE:
-            return "SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_CODE_SIZE";
-        case SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_MAGIC_NUMBER:
-            return "SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_MAGIC_NUMBER";
-        case SPV_REFLECT_RESULT_ERROR_SPIRV_UNEXPECTED_EOF:
-            return "SPV_REFLECT_RESULT_ERROR_SPIRV_UNEXPECTED_EOF";
-        case SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_ID_REFERENCE:
-            return "SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_ID_REFERENCE";
-        case SPV_REFLECT_RESULT_ERROR_SPIRV_SET_NUMBER_OVERFLOW:
-            return "SPV_REFLECT_RESULT_ERROR_SPIRV_SET_NUMBER_OVERFLOW";
-        case SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_STORAGE_CLASS:
-            return "SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_STORAGE_CLASS";
-        case SPV_REFLECT_RESULT_ERROR_SPIRV_RECURSION:
-            return "SPV_REFLECT_RESULT_ERROR_SPIRV_RECURSION";
-        case SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_INSTRUCTION:
-            return "SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_INSTRUCTION";
-        case SPV_REFLECT_RESULT_ERROR_SPIRV_UNEXPECTED_BLOCK_DATA:
-            return "SPV_REFLECT_RESULT_ERROR_SPIRV_UNEXPECTED_BLOCK_DATA";
-        case SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_BLOCK_MEMBER_REFERENCE:
-            return "SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_BLOCK_MEMBER_REFERENCE";
-            /*case SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_ENTRY_POINT:
-                return "SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_ENTRY_POINT";
-            case SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_EXECUTION_MODE:
-                return "SPV_REFLECT_RESULT_ERROR_SPIRV_INVALID_EXECUTION_MODE";*/
-        }
-
-        return "SPV_REFLECT_INVALID_ERROR_CODE";
     }
 
     VkSampleCountFlagBits getMaxUsableSampleCount( VkPhysicalDeviceProperties &physicalDeviceProperties,

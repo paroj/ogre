@@ -60,7 +60,7 @@ namespace Ogre
     /// @see    VulkanRootLayout::bind
     struct VulkanGlobalBindingTable
     {
-        VkDescriptorBufferInfo paramsBuffer[NumShaderTypes + 1u];
+        VkDescriptorBufferInfo paramsBuffer[GPT_COUNT];
         VkDescriptorBufferInfo constBuffers[NUM_BIND_CONST_BUFFERS];
         VkBufferView texBuffers[NUM_BIND_TEX_BUFFERS];
 

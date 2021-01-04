@@ -33,20 +33,26 @@ THE SOFTWARE.
 #include "OgreVulkanTextureGpuWindow.h"
 #include "OgreVulkanUtils.h"
 
-#include "Vao/OgreVulkanVaoManager.h"
-
 #include "OgreException.h"
-#include "OgrePixelFormatGpuUtils.h"
+#include "OgrePixelFormat.h"
 #include "OgreVulkanTextureGpuManager.h"
 
 #include "vulkan/vulkan_core.h"
+
+#if OGRE_PLATFORM == OGRE_PLATFORM_LINUX
+#include <X11/Xlib-xcb.h>
+#include <xcb/randr.h>
+#include <xcb/xcb.h>
+#include "vulkan/vulkan_xcb.h"
+#endif
+
+#include "OgreDepthBuffer.h"
 
 #define TODO_handleSeparatePresentQueue
 
 namespace Ogre
 {
     VulkanWindow::VulkanWindow( const String &title, uint32 width, uint32 height, bool fullscreenMode ) :
-        Window( title, width, height, fullscreenMode ),
         mLowestLatencyVSync( false ),
         mHwGamma( false ),
         mClosed( false ),
@@ -58,7 +64,7 @@ namespace Ogre
         mRebuildingSwapchain( false ),
         mSuboptimal( false )
     {
-        mFocused = true;
+        mActive = true;
     }
     //-------------------------------------------------------------------------
     VulkanWindow::~VulkanWindow() {}
@@ -68,9 +74,6 @@ namespace Ogre
         NameValuePairList::const_iterator opt;
         NameValuePairList::const_iterator end = miscParams->end();
 
-        opt = miscParams->find( "title" );
-        if( opt != end )
-            mTitle = opt->second;
         opt = miscParams->find( "vsync" );
         if( opt != end )
             mVSync = StringConverter::parseBool( opt->second );
@@ -79,7 +82,7 @@ namespace Ogre
             mVSyncInterval = StringConverter::parseUnsignedInt( opt->second );
         opt = miscParams->find( "FSAA" );
         if( opt != end )
-            mRequestedSampleDescription.parseString( opt->second );
+            mFSAA = StringConverter::parseUnsignedInt(opt->second);
         opt = miscParams->find( "gamma" );
         if( opt != end )
             mHwGamma = StringConverter::parseBool( opt->second );
@@ -88,7 +91,7 @@ namespace Ogre
             mLowestLatencyVSync = opt->second == "Lowest Latency";
     }
     //-------------------------------------------------------------------------
-    PixelFormatGpu VulkanWindow::chooseSurfaceFormat( bool hwGamma )
+    VkFormat VulkanWindow::chooseSurfaceFormat( bool hwGamma )
     {
         uint32 numFormats = 0u;
         VkResult result = vkGetPhysicalDeviceSurfaceFormatsKHR( mDevice->mPhysicalDevice, mSurfaceKHR,
@@ -104,42 +107,32 @@ namespace Ogre
         FastArray<VkSurfaceFormatKHR> formats;
         formats.resize( numFormats );
         result = vkGetPhysicalDeviceSurfaceFormatsKHR( mDevice->mPhysicalDevice, mSurfaceKHR,
-                                                       &numFormats, formats.begin() );
+                                                       &numFormats, formats.data() );
         checkVkResult( result, "vkGetPhysicalDeviceSurfaceFormatsKHR" );
 
-        PixelFormatGpu pixelFormat = PFG_UNKNOWN;
-        for( size_t i = 0; i < numFormats && pixelFormat == PFG_UNKNOWN; ++i )
+        PixelFormatGpu pixelFormat = PF_UNKNOWN;
+        for( size_t i = 0; i < numFormats && pixelFormat == PF_UNKNOWN; ++i )
         {
             switch( formats[i].format )
             {
+            case VK_FORMAT_B8G8R8A8_SRGB:
             case VK_FORMAT_R8G8B8A8_SRGB:
                 if( hwGamma )
-                    pixelFormat = PFG_RGBA8_UNORM_SRGB;
-                break;
-            case VK_FORMAT_B8G8R8A8_SRGB:
-                if( hwGamma )
-                    pixelFormat = PFG_BGRA8_UNORM_SRGB;
-                break;
+                    return formats[i].format;
+                continue;
+            case VK_FORMAT_B8G8R8A8_UNORM:
             case VK_FORMAT_R8G8B8A8_UNORM:
                 if( !hwGamma )
-                    pixelFormat = PFG_RGBA8_UNORM;
-                break;
-            case VK_FORMAT_B8G8R8A8_UNORM:
-                if( !hwGamma )
-                    pixelFormat = PFG_BGRA8_UNORM;
-                break;
+                    return formats[i].format;
+                continue;
             default:
                 continue;
             }
         }
 
-        if( pixelFormat == PFG_UNKNOWN )
-        {
-            OGRE_EXCEPT( Exception::ERR_RENDERINGAPI_ERROR, "Could not find a suitable Surface format",
-                         "VulkanWindow::chooseSurfaceFormat" );
-        }
-
-        return pixelFormat;
+        OGRE_EXCEPT( Exception::ERR_RENDERINGAPI_ERROR, "Could not find a suitable Surface format",
+                        "VulkanWindow::chooseSurfaceFormat" );
+        return VK_FORMAT_UNDEFINED;
     }
     //-------------------------------------------------------------------------
     void VulkanWindow::createSwapchain( void )
@@ -152,10 +145,9 @@ namespace Ogre
         checkVkResult( result, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR" );
 
         // Swapchain may be smaller/bigger than requested
-        setFinalResolution( Math::Clamp( getWidth(), surfaceCaps.minImageExtent.width,
-                                         surfaceCaps.maxImageExtent.width ),
-                            Math::Clamp( getHeight(), surfaceCaps.minImageExtent.height,
-                                         surfaceCaps.maxImageExtent.height ) );
+        mWidth = Math::Clamp(mWidth, surfaceCaps.minImageExtent.width, surfaceCaps.maxImageExtent.width);
+        mHeight =
+            Math::Clamp(mHeight, surfaceCaps.minImageExtent.height, surfaceCaps.maxImageExtent.height);
 
         VkBool32 supported;
         result = vkGetPhysicalDeviceSurfaceSupportKHR(
@@ -175,7 +167,7 @@ namespace Ogre
         FastArray<VkPresentModeKHR> presentModes;
         presentModes.resize( numPresentModes );
         vkGetPhysicalDeviceSurfacePresentModesKHR( mDevice->mPhysicalDevice, mSurfaceKHR,
-                                                   &numPresentModes, presentModes.begin() );
+                                                   &numPresentModes, presentModes.data() );
 
         // targetPresentModes[0] is the target, targetPresentModes[1] is the fallback
         bool presentModesFound[2] = { false, false };
@@ -229,14 +221,11 @@ namespace Ogre
         // Create swapchain
         //-----------------------------
 
-        VaoManager *vaoManager = mDevice->mVaoManager;
-
         // We may sometimes have to wait on the driver to complete internal operations
         // before we can acquire another image to render to.
         // Therefore it is recommended to request at least one more image than the minimum.
         // https://vulkan-tutorial.com/Drawing_a_triangle/Presentation/Swap_chain
-        uint32 minImageCount =
-            std::max<uint32>( surfaceCaps.minImageCount, vaoManager->getDynamicBufferMultiplier() ) + 1;
+        uint32 minImageCount = surfaceCaps.minImageCount + 1;
         if( surfaceCaps.maxImageCount != 0u )
             minImageCount = std::min<uint32>( minImageCount, surfaceCaps.maxImageCount );
 
@@ -245,7 +234,7 @@ namespace Ogre
         swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         swapchainCreateInfo.surface = mSurfaceKHR;
         swapchainCreateInfo.minImageCount = minImageCount;
-        swapchainCreateInfo.imageFormat = VulkanMappings::get( mTexture->getPixelFormat() );
+        swapchainCreateInfo.imageFormat = chooseSurfaceFormat(false);
         swapchainCreateInfo.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
         swapchainCreateInfo.imageExtent.width = getWidth();
         swapchainCreateInfo.imageExtent.height = getHeight();
@@ -342,15 +331,17 @@ namespace Ogre
 
         mSwapchainImages.resize( numSwapchainImages );
         result = vkGetSwapchainImagesKHR( mDevice->mDevice, mSwapchain, &numSwapchainImages,
-                                          mSwapchainImages.begin() );
+                                          mSwapchainImages.data() );
         checkVkResult( result, "vkGetSwapchainImagesKHR" );
 
         acquireNextSwapchain();
 
+#if 0
         if( mDepthBuffer )
             mDepthBuffer->_transitionTo( GpuResidency::Resident, (uint8 *)0 );
         if( mStencilBuffer && mStencilBuffer != mDepthBuffer )
             mStencilBuffer->_transitionTo( GpuResidency::Resident, (uint8 *)0 );
+#endif
 
         mDevice->mRenderSystem->notifySwapchainCreated( this );
     }
@@ -361,7 +352,8 @@ namespace Ogre
 
         if( mSwapchainSemaphore )
         {
-            mDevice->mVaoManager->notifySemaphoreUnused( mSwapchainSemaphore );
+            //mDevice->mVaoManager->notifySemaphoreUnused( mSwapchainSemaphore );
+            vkDestroySemaphore( mDevice->mDevice, mSwapchainSemaphore, 0 );
             mSwapchainSemaphore = 0;
         }
 
@@ -379,12 +371,18 @@ namespace Ogre
         OGRE_ASSERT_LOW( mSwapchainStatus == SwapchainReleased );
         OGRE_ASSERT_MEDIUM( !mSwapchainSemaphore );
 
-        VulkanVaoManager *vaoManager = mDevice->mVaoManager;
+        VkSemaphoreCreateInfo semaphoreCreateInfo;
+        makeVkStruct( semaphoreCreateInfo, VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO );
 
-        mSwapchainSemaphore = vaoManager->getAvailableSempaphore();
+        VkResult result =
+            vkCreateSemaphore( mDevice->mDevice, &semaphoreCreateInfo, 0, &mSwapchainSemaphore );
+        checkVkResult( result, "vkCreateSemaphore" );
+
+        //VulkanVaoManager *vaoManager = mDevice->mVaoManager;
+        //mSwapchainSemaphore = vaoManager->getAvailableSempaphore();
 
         uint32 swapchainIdx = 0u;
-        VkResult result = vkAcquireNextImageKHR( mDevice->mDevice, mSwapchain, UINT64_MAX,
+        result = vkAcquireNextImageKHR( mDevice->mDevice, mSwapchain, UINT64_MAX,
                                                  mSwapchainSemaphore, VK_NULL_HANDLE, &swapchainIdx );
         if( result != VK_SUCCESS || mSuboptimal )
         {
@@ -410,7 +408,6 @@ namespace Ogre
             mSwapchainStatus = SwapchainAcquired;
 
             VulkanTextureGpuWindow *vulkanTexture = static_cast<VulkanTextureGpuWindow *>( mTexture );
-
             vulkanTexture->_setCurrentSwapchain( mSwapchainImages[swapchainIdx], swapchainIdx );
         }
     }
@@ -431,11 +428,101 @@ namespace Ogre
         mDevice = device;
     }
     //-------------------------------------------------------------------------
-    void VulkanWindow::_initialize( TextureGpuManager *textureGpuManager )
+    void VulkanWindow::create(const String& name, unsigned int width, unsigned int height, bool fullScreen,
+                              const NameValuePairList* miscParams)
     {
-        OGRE_EXCEPT( Exception::ERR_INVALID_CALL,
-                     "Call _initialize( TextureGpuManager*, const NameValuePairList * ) instead",
-                     "VulkanWindow::_initialize" );
+        destroy();
+
+        mActive = true;
+        mVisible = true;
+        mClosed = false;
+        mHwGamma = false;
+        mWidth = width;
+        mHeight = height;
+
+        xcb_connection_t *mConnection;
+        xcb_screen_t *mScreen;
+        xcb_window_t mXcbWindow;
+
+        if( miscParams )
+        {
+            NameValuePairList::const_iterator opt;
+            NameValuePairList::const_iterator end = miscParams->end();
+
+            opt = miscParams->find( "parentWindowHandle" );
+            OgreAssert( opt != end,  "parentWindowHandle required" );
+            {
+#if OGRE_PLATFORM == OGRE_PLATFORM_LINUX
+                Display *dpy = XOpenDisplay(NULL);
+                mConnection = XGetXCBConnection(dpy);
+                mXcbWindow = (xcb_window_t)StringConverter::parseSizeT( opt->second );
+
+                XWindowAttributes windowAttrib;
+                XGetWindowAttributes( dpy, mXcbWindow, &windowAttrib );
+
+                int scr = DefaultScreen( dpy );
+
+                const xcb_setup_t *setup = xcb_get_setup( mConnection );
+                xcb_screen_iterator_t iter = xcb_setup_roots_iterator( setup );
+                while( scr-- > 0 )
+                    xcb_screen_next( &iter );
+
+                mScreen = iter.data;
+#endif
+            }
+
+            parseSharedParams( miscParams );
+        }
+
+        PFN_vkGetPhysicalDeviceXcbPresentationSupportKHR get_xcb_presentation_support =
+            (PFN_vkGetPhysicalDeviceXcbPresentationSupportKHR)vkGetInstanceProcAddr(
+                mDevice->mInstance, "vkGetPhysicalDeviceXcbPresentationSupportKHR" );
+        PFN_vkCreateXcbSurfaceKHR create_xcb_surface = (PFN_vkCreateXcbSurfaceKHR)vkGetInstanceProcAddr(
+            mDevice->mInstance, "vkCreateXcbSurfaceKHR" );
+
+        if( !get_xcb_presentation_support( mDevice->mPhysicalDevice, mDevice->mGraphicsQueue.mFamilyIdx,
+                                           mConnection, mScreen->root_visual ) )
+        {
+            OGRE_EXCEPT( Exception::ERR_RENDERINGAPI_ERROR, "Vulkan not supported on given X11 window",
+                         "VulkanXcbWindow::_initialize" );
+        }
+
+        VkXcbSurfaceCreateInfoKHR xcbSurfCreateInfo;
+        memset( &xcbSurfCreateInfo, 0, sizeof( xcbSurfCreateInfo ) );
+        xcbSurfCreateInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
+        xcbSurfCreateInfo.connection = mConnection;
+        xcbSurfCreateInfo.window = mXcbWindow;
+        create_xcb_surface( mDevice->mInstance, &xcbSurfCreateInfo, 0, &mSurfaceKHR );
+
+        mTexture = new VulkanTextureGpuWindow(0, NULL, "RenderWindow", 0, TEX_TYPE_2D, NULL, this);;
+#if 0
+        mDepthBuffer = textureManager->createWindowDepthBuffer();
+        mStencilBuffer = 0;
+
+        setFinalResolution( mRequestedWidth, mRequestedHeight );
+        mTexture->setFormat( chooseSurfaceFormat( mHwGamma ) );
+        mDepthBuffer->setPixelFormat( DepthBuffer::DefaultDepthBufferFormat );
+        if( PixelFormatGpuUtils::isStencil( mDepthBuffer->getPixelFormat() ) )
+            mStencilBuffer = mDepthBuffer;
+
+        mTexture->setSampleDescription( mRequestedSampleDescription );
+        mDepthBuffer->setSampleDescription( mRequestedSampleDescription );
+        mSampleDescription = mRequestedSampleDescription;
+
+        if( mDepthBuffer )
+        {
+            mTexture->_setDepthBufferDefaults( DepthBuffer::POOL_NON_SHAREABLE, false,
+                                               mDepthBuffer->getPixelFormat() );
+        }
+        else
+        {
+            mTexture->_setDepthBufferDefaults( DepthBuffer::POOL_NO_DEPTH, false, PFG_NULL );
+        }
+
+        mTexture->_transitionTo( GpuResidency::Resident, (uint8 *)0 );
+#endif
+
+        createSwapchain();
     }
     //-------------------------------------------------------------------------
     VkSemaphore VulkanWindow::getImageAcquiredSemaphore( void )
@@ -475,16 +562,19 @@ namespace Ogre
 
         destroySwapchain();
 
+#if 0
         if( mDepthBuffer )
             mDepthBuffer->_transitionTo( GpuResidency::OnStorage, (uint8 *)0 );
         if( mStencilBuffer && mStencilBuffer != mDepthBuffer )
             mStencilBuffer->_transitionTo( GpuResidency::OnStorage, (uint8 *)0 );
+#endif
 
         createSwapchain();
     }
     //-------------------------------------------------------------------------
     void VulkanWindow::swapBuffers( void )
     {
+        mSwapchainStatus = SwapchainUsedInRendering;
         if( mSwapchainStatus == SwapchainAcquired || mSwapchainStatus == SwapchainPendingSwap )
         {
             // Ogre never rendered to this window. There's nothing to present.
@@ -496,9 +586,9 @@ namespace Ogre
         OGRE_ASSERT_LOW( mSwapchainStatus == SwapchainUsedInRendering );
 
         OGRE_ASSERT_MEDIUM( mSwapchainSemaphore );
-        VulkanVaoManager *vaoManager = mDevice->mVaoManager;
-        vaoManager->notifyWaitSemaphoreSubmitted( mSwapchainSemaphore );
-        mSwapchainSemaphore = 0;
+        //VulkanVaoManager *vaoManager = mDevice->mVaoManager;
+        //vaoManager->notifyWaitSemaphoreSubmitted( mSwapchainSemaphore );
+        //mSwapchainSemaphore = 0;
 
         mDevice->mGraphicsQueue.mWindowsPendingSwap.push_back( this );
         mSwapchainStatus = SwapchainPendingSwap;
@@ -508,8 +598,8 @@ namespace Ogre
     {
         OGRE_ASSERT_LOW( mSwapchainStatus == SwapchainPendingSwap );
 
-        VulkanTextureGpuWindow *vulkanTexture = static_cast<VulkanTextureGpuWindow *>( mTexture );
-        const uint32 currentSwapchainIdx = vulkanTexture->getCurrentSwapchainIdx();
+        //VulkanTextureGpuWindow *vulkanTexture = static_cast<VulkanTextureGpuWindow *>( mTexture );
+        const uint32 currentSwapchainIdx = 0;//vulkanTexture->getCurrentSwapchainIdx();
 
         TODO_handleSeparatePresentQueue;
         /*

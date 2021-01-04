@@ -31,8 +31,6 @@ THE SOFTWARE.
 
 #include "OgreVulkanPrerequisites.h"
 
-#include "Vao/OgreBufferPacked.h"
-
 #include "vulkan/vulkan_core.h"
 
 #include "OgreHeaderPrefix.h"
@@ -126,8 +124,8 @@ namespace Ogre
         /// then mCurrentFence can enter into the recycle pool
         uint32 mCurrentFenceRefCount;
 
-        typedef map<const BufferPacked *, bool>::type BufferPackedDownloadMap;
-        typedef map<VulkanTextureGpu *, bool>::type TextureGpuDownloadMap;
+        typedef std::map<const BufferPacked *, bool> BufferPackedDownloadMap;
+        typedef std::map<VulkanTextureGpu *, bool> TextureGpuDownloadMap;
 
         EncoderState mEncoderState;
         VkAccessFlags mCopyEndReadSrcBufferFlags;
@@ -200,7 +198,7 @@ namespace Ogre
         @param buffer
         @param texture
         */
-        void prepareForDownload( const BufferPacked *buffer, TextureGpu *texture );
+        void prepareForDownload( const BufferPacked *buffer, VulkanTextureGpu *texture );
 
     public:
         VulkanQueue();
@@ -248,7 +246,7 @@ namespace Ogre
                 queue->getCopyEncoder( dst, dst, false );
             @endcode
         */
-        void getCopyEncoder( const BufferPacked *buffer, TextureGpu *texture, const bool bDownload );
+        void getCopyEncoder( const BufferPacked *buffer, VulkanTextureGpu *texture, const bool bDownload );
         void getCopyEncoderV1Buffer( const bool bDownload );
 
         void endCopyEncoder( void );

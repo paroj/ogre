@@ -30,17 +30,15 @@ THE SOFTWARE.
 #define _OgreVulkanAsyncTextureTicket_H_
 
 #include "OgreVulkanPrerequisites.h"
-
-#include "OgreAsyncTextureTicket.h"
-
-#include "OgreTextureBox.h"
-#include "Vao/OgreVulkanVaoManager.h"
+#include "OgreTexture.h"
 
 namespace Ogre
 {
+    class PixelBox;
+
     /** See AsyncTextureTicket
      */
-    class _OgreVulkanExport VulkanAsyncTextureTicket : public AsyncTextureTicket
+    class _OgreVulkanExport VulkanAsyncTextureTicket
     {
     protected:
         VulkanRawBuffer mVboName;
@@ -50,20 +48,20 @@ namespace Ogre
         VulkanVaoManager *mVaoManager;
         VulkanQueue *mQueue;
 
-        virtual TextureBox mapImpl( uint32 slice );
+        virtual PixelBox mapImpl( uint32 slice );
         virtual void unmapImpl( void );
 
         void waitForDownloadToFinish( void );
 
     public:
         VulkanAsyncTextureTicket( uint32 width, uint32 height, uint32 depthOrSlices,
-                                  TextureTypes::TextureTypes textureType,
+                                  TextureType textureType,
                                   PixelFormatGpu pixelFormatFamily, VulkanVaoManager *vaoManager,
                                   VulkanQueue *queue );
         virtual ~VulkanAsyncTextureTicket();
 
         virtual void downloadFromGpu( TextureGpu *textureSrc, uint8 mipLevel, bool accurateTracking,
-                                      TextureBox *srcBox );
+                                      PixelBox *srcBox );
 
         virtual bool queryIsTransferDone( void );
     };

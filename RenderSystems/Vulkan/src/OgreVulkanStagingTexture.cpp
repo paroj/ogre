@@ -78,15 +78,15 @@ namespace Ogre
         // different texel size could unalign us.
         //
         // We use getSizeBytes rather than getBytesPerPixel because the former covers compressed formats
-        if( PixelFormatGpuUtils::getSizeBytes( 1u, 1u, 1u, 1u, mFormatFamily, 1u ) !=
-            PixelFormatGpuUtils::getSizeBytes( 1u, 1u, 1u, 1u, pixelFormat, 1u ) )
+        if( PixelUtil::getSizeBytes( 1u, 1u, 1u, 1u, mFormatFamily, 1u ) !=
+            PixelUtil::getSizeBytes( 1u, 1u, 1u, 1u, pixelFormat, 1u ) )
         {
             return false;
         }
         return StagingTextureBufferImpl::supportsFormat( width, height, depth, slices, pixelFormat );
     }
     //-----------------------------------------------------------------------------------
-    bool VulkanStagingTexture::belongsToUs( const TextureBox &box )
+    bool VulkanStagingTexture::belongsToUs( const PixelBox &box )
     {
         return box.data >= mLastMappedPtr &&
                box.data <= static_cast<uint8 *>( mLastMappedPtr ) + mCurrentOffset;
@@ -121,8 +121,8 @@ namespace Ogre
         StagingTextureBufferImpl::stopMapRegion();
     }
     //-----------------------------------------------------------------------------------
-    void VulkanStagingTexture::upload( const TextureBox &srcBox, TextureGpu *dstTexture, uint8 mipLevel,
-                                       const TextureBox *cpuSrcBox, const TextureBox *dstBox,
+    void VulkanStagingTexture::upload( const PixelBox &srcBox, TextureGpu *dstTexture, uint8 mipLevel,
+                                       const PixelBox *cpuSrcBox, const PixelBox *dstBox,
                                        bool skipSysRamCopy )
     {
         StagingTextureBufferImpl::upload( srcBox, dstTexture, mipLevel, cpuSrcBox, dstBox,
@@ -139,7 +139,7 @@ namespace Ogre
         // We can't trust mFormatFamily because supportsFormat accepts any format
         const PixelFormatGpu pixelFormat = dstTexture->getPixelFormat();
 
-        if( PixelFormatGpuUtils::isCompressed( pixelFormat ) )
+        if( PixelUtil::isCompressed( pixelFormat ) )
         {
             bytesPerRow = 0;
             // bytesPerImage = 0;
@@ -165,7 +165,7 @@ namespace Ogre
         if( bytesPerRow != 0 )
         {
             region.bufferRowLength = static_cast<uint32_t>(
-                bytesPerRow / PixelFormatGpuUtils::getBytesPerPixel( pixelFormat ) );
+                bytesPerRow / PixelUtil::getBytesPerPixel( pixelFormat ) );
         }
         region.bufferImageHeight = 0;
 

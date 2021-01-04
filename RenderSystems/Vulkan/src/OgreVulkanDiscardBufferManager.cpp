@@ -41,10 +41,10 @@ namespace Ogre
     {
         const size_t defaultCapacity = 4 * 1024 * 1024;
 
-        VulkanVaoManager *vaoMgr = static_cast<VulkanVaoManager *>( vaoManager );
-        mBuffer = vaoMgr->allocateRawBuffer( VulkanVaoManager::CPU_WRITE_PERSISTENT, defaultCapacity );
+        //VulkanVaoManager *vaoMgr = static_cast<VulkanVaoManager *>( vaoManager );
+        //mBuffer = vaoMgr->allocateRawBuffer( VulkanVaoManager::CPU_WRITE_PERSISTENT, defaultCapacity );
 
-        mFreeBlocks.push_back( VulkanVaoManager::Block( 0, defaultCapacity ) );
+        mFreeBlocks.push_back( Block( 0, defaultCapacity ) );
     }
 
     VulkanDiscardBufferManager::~VulkanDiscardBufferManager()
@@ -56,8 +56,8 @@ namespace Ogre
             OGRE_DELETE *itor++;
         mDiscardBuffers.clear();
 
-        VulkanVaoManager *vaoManager = static_cast<VulkanVaoManager *>( mVaoManager );
-        vaoManager->deallocateRawBuffer( mBuffer );
+        //VulkanVaoManager *vaoManager = static_cast<VulkanVaoManager *>( mVaoManager );
+        //vaoManager->deallocateRawBuffer( mBuffer );
     }
 
     void VulkanDiscardBufferManager::growToFit( size_t extraBytes,
@@ -69,10 +69,10 @@ namespace Ogre
         const size_t newCapacity =
             std::max( oldCapacity + extraBytes, oldCapacity + ( oldCapacity >> 1u ) + 1u );
 
-        VulkanVaoManager *vaoMagr = static_cast<VulkanVaoManager *>( mVaoManager );
+        //VulkanVaoManager *vaoMagr = static_cast<VulkanVaoManager *>( mVaoManager );
 
         VulkanRawBuffer oldBuffer = mBuffer;
-        mBuffer = vaoMagr->allocateRawBuffer( VulkanVaoManager::CPU_WRITE_PERSISTENT, newCapacity );
+        //mBuffer = vaoMagr->allocateRawBuffer( VulkanVaoManager::CPU_WRITE_PERSISTENT, newCapacity );
 
         mDevice->mGraphicsQueue.getCopyEncoderV1Buffer( false );
 
@@ -81,7 +81,7 @@ namespace Ogre
             // MTLBuffer to new one, and tag all of them as in use by GPU (due to the copyFromBuffer);
             // except 'forDiscardBuffer' which we were told this data won't be used.
 
-            const uint32 currentFrame = mVaoManager->getFrameCount();
+            const uint32 currentFrame = 0;//mVaoManager->getFrameCount();
             VulkanDiscardBufferVec::iterator itor = mDiscardBuffers.begin();
             VulkanDiscardBufferVec::iterator end = mDiscardBuffers.end();
 
@@ -101,7 +101,7 @@ namespace Ogre
                 }
                 else
                 {
-                    ( *itor )->mLastFrameUsed = currentFrame - mVaoManager->getDynamicBufferMultiplier();
+                    ( *itor )->mLastFrameUsed = 0;//currentFrame - mVaoManager->getDynamicBufferMultiplier();
                 }
 
                 ++itor;
@@ -117,9 +117,9 @@ namespace Ogre
         // write to the same resource even if the regions don't overlap.
         mDevice->stall();
 
-        vaoMagr->deallocateRawBuffer( oldBuffer );
+        //vaoMagr->deallocateRawBuffer( oldBuffer );
 
-        mFreeBlocks.push_back( VulkanVaoManager::Block( oldCapacity, newCapacity - oldCapacity ) );
+        mFreeBlocks.push_back( Block( oldCapacity, newCapacity - oldCapacity ) );
 
         {
             // All "unsafe" blocks are no longer unsafe, since we're using a new buffer.
@@ -129,7 +129,7 @@ namespace Ogre
             while( itor != end )
             {
                 mFreeBlocks.push_back( *itor );
-                VulkanVaoManager::mergeContiguousBlocks( mFreeBlocks.end() - 1, mFreeBlocks );
+                //VulkanVaoManager::mergeContiguousBlocks( mFreeBlocks.end() - 1, mFreeBlocks );
                 ++itor;
             }
 
@@ -139,8 +139,8 @@ namespace Ogre
 
     void VulkanDiscardBufferManager::updateUnsafeBlocks()
     {
-        const uint32 currentFrame = mVaoManager->getFrameCount();
-        const uint32 bufferMultiplier = mVaoManager->getDynamicBufferMultiplier();
+        const uint32 currentFrame = 0;//mVaoManager->getFrameCount();
+        const uint32 bufferMultiplier = 1;//mVaoManager->getDynamicBufferMultiplier();
 
         UnsafeBlockVec::iterator itor = mUnsafeBlocks.begin();
         UnsafeBlockVec::iterator end = mUnsafeBlocks.end();
@@ -149,7 +149,7 @@ namespace Ogre
         {
             // This block is safe now to put back into free blocks.
             mFreeBlocks.push_back( *itor );
-            VulkanVaoManager::mergeContiguousBlocks( mFreeBlocks.end() - 1, mFreeBlocks );
+            //VulkanVaoManager::mergeContiguousBlocks( mFreeBlocks.end() - 1, mFreeBlocks );
             ++itor;
         }
 
@@ -166,7 +166,7 @@ namespace Ogre
             {
                 // This block is safe now to put back into free blocks.
                 mFreeBlocks.push_back( *itor );
-                VulkanVaoManager::mergeContiguousBlocks( mFreeBlocks.end() - 1, mFreeBlocks );
+                //VulkanVaoManager::mergeContiguousBlocks( mFreeBlocks.end() - 1, mFreeBlocks );
                 ++itor;
             }
 
@@ -174,8 +174,8 @@ namespace Ogre
         }
 
         {
-            const uint32 currentFrame = mVaoManager->getFrameCount();
-            const uint32 bufferMultiplier = mVaoManager->getDynamicBufferMultiplier();
+            const uint32 currentFrame = 0;//mVaoManager->getFrameCount();
+            const uint32 bufferMultiplier = 1;//mVaoManager->getDynamicBufferMultiplier();
 
             VulkanDiscardBufferVec::const_iterator itor = mDiscardBuffers.begin();
             VulkanDiscardBufferVec::const_iterator end = mDiscardBuffers.end();
@@ -195,12 +195,12 @@ namespace Ogre
 
         if( discardBuffer->mBuffer )
         {
-            if( mVaoManager->getFrameCount() - discardBuffer->mLastFrameUsed >=
-                mVaoManager->getDynamicBufferMultiplier() )
+            /*if( mVaoManager->getFrameCount() - discardBuffer->mLastFrameUsed >=
+                mVaoManager->getDynamicBufferMultiplier() )*/
             {
                 return;  // Current block the buffer owns is safe to reuse.
             }
-            else
+            //else
             {
                 // Release the block back into the pool (sorted by mLastFrameUsed)
                 UnsafeBlock unsafeBlock( discardBuffer->getBlockStart(), discardBuffer->getBlockSize(),
@@ -214,10 +214,10 @@ namespace Ogre
         updateUnsafeBlocks();
 
         // Find smallest block.
-        VulkanVaoManager::BlockVec::iterator itor = mFreeBlocks.begin();
-        VulkanVaoManager::BlockVec::iterator end = mFreeBlocks.end();
+        auto itor = mFreeBlocks.begin();
+        auto end = mFreeBlocks.end();
 
-        VulkanVaoManager::BlockVec::iterator smallestBlock = end;
+        auto smallestBlock = end;
 
         while( itor != end )
         {
@@ -315,7 +315,7 @@ namespace Ogre
         mBufferOffset( 0 ),
         mBufferSize( bufferSize ),
         mAlignment( alignment ),
-        mLastFrameUsed( vaoManager->getFrameCount() - vaoManager->getDynamicBufferMultiplier() ),
+        mLastFrameUsed( 0 ),
         mVaoManager( vaoManager ),
         mOwner( owner )
     {
@@ -332,7 +332,7 @@ namespace Ogre
 
     VkBuffer VulkanDiscardBuffer::getBufferName( size_t &outOffset )
     {
-        mLastFrameUsed = mVaoManager->getFrameCount();
+        mLastFrameUsed = 0;//mVaoManager->getFrameCount();
         outOffset = mBufferOffset + mOwner->getBuffer().mInternalBufferStart;
         return mBuffer;
     }

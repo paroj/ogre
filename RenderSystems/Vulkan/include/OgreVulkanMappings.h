@@ -29,15 +29,15 @@ Copyright (c) 2000-present Torus Knot Software Ltd
 #ifndef _OgreVulkanMappings_H_
 #define _OgreVulkanMappings_H_
 
-#include <SPIRV-Reflect/include/spirv/unified1/spirv.h>
+#include <spirv/unified1/spirv.h>
 
 #include "OgreVulkanPrerequisites.h"
 
 #include "OgreBlendMode.h"
-#include "OgreHlmsPso.h"
-#include "OgreHlmsSamplerblock.h"
-#include "OgrePixelFormatGpu.h"
-#include "OgreTextureGpu.h"
+#include "OgrePixelFormat.h"
+#include "OgreTexture.h"
+#include "OgreRenderOperation.h"
+#include "OgreRenderSystem.h"
 
 #include "vulkan/vulkan_core.h"
 
@@ -46,7 +46,7 @@ namespace Ogre
     class _OgreVulkanExport VulkanMappings
     {
     public:
-        static VkPrimitiveTopology get( OperationType opType );
+        static VkPrimitiveTopology get( RenderOperation::OperationType opType );
         static VkPolygonMode get( PolygonMode polygonMode );
         static VkCullModeFlags get( CullingMode cullMode );
         static VkCompareOp get( CompareFunction compareFunc );
@@ -61,7 +61,7 @@ namespace Ogre
         static VkSamplerMipmapMode getMipFilter( FilterOptions filter );
         static VkSamplerAddressMode get( TextureAddressingMode mode );
 
-        static VkImageViewType get( TextureTypes::TextureTypes textureType );
+        static VkImageViewType get( TextureType textureType );
         static VkFormat get( PixelFormatGpu pf );
         static VkImageAspectFlags getImageAspect( PixelFormatGpu pf,
                                                   const bool bPreferDepthOverStencil = false );
@@ -73,7 +73,7 @@ namespace Ogre
                                              ResourceAccess::ResourceAccess access,
                                              const TextureGpu *texture, bool bIsDst );
 
-        static VkImageLayout get( ResourceLayout::Layout layout, const TextureGpu *texture );
+        static VkImageLayout get( ResourceLayout::Layout layout, const Texture *texture );
 
         static uint32_t getFormatSize( VkFormat format );
 

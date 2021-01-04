@@ -31,7 +31,6 @@ THE SOFTWARE.
 #include "OgreVulkanDevice.h"
 #include "OgreVulkanRootLayout.h"
 #include "OgreVulkanUtils.h"
-#include "Vao/OgreVulkanVaoManager.h"
 
 #include "OgreException.h"
 

@@ -41,7 +41,7 @@ namespace Ogre
     {
         FastArray<VkDescriptorImageInfo> mSamplers;
         VkWriteDescriptorSet mWriteDescSet;
-        VulkanDescriptorSetSampler( const DescriptorSetSampler &descSet, VkSampler dummySampler );
+        VulkanDescriptorSetSampler( const VulkanDescriptorSetSampler &descSet, VkSampler dummySampler );
     };
 
     struct VulkanDescriptorSetTexture
@@ -53,9 +53,9 @@ namespace Ogre
         VkWriteDescriptorSet mWriteDescSetHazardous;
         uint32 mLastHazardousTex;
 
-        VulkanDescriptorSetTexture( const DescriptorSetTexture &descSet );
+        VulkanDescriptorSetTexture( const VulkanDescriptorSetTexture &descSet );
 
-        void setHazardousTex( const DescriptorSetTexture &descSet, const uint32 hazardousTexIdx,
+        void setHazardousTex( const VulkanDescriptorSetTexture &descSet, const uint32 hazardousTexIdx,
                               VulkanTextureGpuManager *textureManager );
     };
 
@@ -66,9 +66,9 @@ namespace Ogre
         FastArray<VkDescriptorImageInfo> mTextures;
         VkWriteDescriptorSet mWriteDescSets[3];
 
-        VulkanDescriptorSetTexture2( const DescriptorSetTexture2 &descSet );
+        VulkanDescriptorSetTexture2( const VulkanDescriptorSetTexture2 &descSet );
 
-        void destroy( VaoManager *vaoManager, VkDevice device, const DescriptorSetTexture2 &descSetUav );
+        void destroy( VaoManager *vaoManager, VkDevice device, const VulkanDescriptorSetTexture2 &descSetUav );
     };
 
     struct VulkanDescriptorSetUav
@@ -77,9 +77,9 @@ namespace Ogre
         FastArray<VkDescriptorImageInfo> mTextures;
         VkWriteDescriptorSet mWriteDescSets[2];
 
-        VulkanDescriptorSetUav( const DescriptorSetUav &descSetUav );
+        VulkanDescriptorSetUav( const VulkanDescriptorSetUav &descSetUav );
 
-        void destroy( const DescriptorSetUav &descSetUav );
+        void destroy( const VulkanDescriptorSetUav &descSetUav );
     };
 }  // namespace Ogre
 

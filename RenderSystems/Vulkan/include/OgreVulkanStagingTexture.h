@@ -31,13 +31,11 @@ THE SOFTWARE.
 
 #include "OgreVulkanPrerequisites.h"
 
-#include "OgreStagingTextureBufferImpl.h"
-
 #include "OgreHeaderPrefix.h"
 
 namespace Ogre
 {
-    class _OgreVulkanExport VulkanStagingTexture : public StagingTextureBufferImpl
+    class _OgreVulkanExport VulkanStagingTexture
     {
         VkBuffer mVboName;
         VulkanDynamicBuffer *mDynamicBuffer;
@@ -46,7 +44,7 @@ namespace Ogre
         void *mMappedPtr;
         void *mLastMappedPtr;
 
-        virtual bool belongsToUs( const TextureBox &box );
+        virtual bool belongsToUs( const PixelBox &box );
         virtual void *RESTRICT_ALIAS_RETURN mapRegionImplRawPtr( void );
 
     public:
@@ -63,8 +61,8 @@ namespace Ogre
         virtual void startMapRegion( void );
         virtual void stopMapRegion( void );
 
-        virtual void upload( const TextureBox &srcBox, TextureGpu *dstTexture, uint8 mipLevel,
-                             const TextureBox *cpuSrcBox = 0, const TextureBox *dstBox = 0,
+        virtual void upload( const PixelBox &srcBox, TextureGpu *dstTexture, uint8 mipLevel,
+                             const PixelBox *cpuSrcBox = 0, const PixelBox *dstBox = 0,
                              bool skipSysRamCopy = false );
 
         VkBuffer _getVboName( void ) const { return mVboName; }

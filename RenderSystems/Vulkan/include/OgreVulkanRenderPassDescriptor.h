@@ -32,8 +32,7 @@ THE SOFTWARE.
 #include "OgreVulkanPrerequisites.h"
 
 #include "OgreCommon.h"
-#include "OgrePixelFormatGpu.h"
-#include "OgreRenderPassDescriptor.h"
+#include "OgrePixelFormat.h"
 
 #include "vulkan/vulkan_core.h"
 
@@ -48,8 +47,28 @@ namespace Ogre
      *  @{
      */
 
-    struct VulkanFrameBufferDescKey : public FrameBufferDescKey
+    struct RenderPassColourTarget
     {
+        VulkanTextureGpu* texture = 0;
+        VulkanTextureGpu* resolveTexture = 0;
+        StoreAction::StoreAction storeAction = StoreAction::DontCare;
+        LoadAction::LoadAction loadAction = LoadAction::DontCare;
+        int mipLevel = 0;
+        int resolveMipLevel = 0;
+        int slice = 0;
+        int resolveSlice = 0;
+        bool readOnly = true;
+        ColourValue clearColour;
+        float clearDepth = 1.0;
+        uint16 clearStencil = 0;
+    };
+
+    struct VulkanFrameBufferDescKey
+    {
+        uint8                   numColourEntries = 1;
+        RenderPassColourTarget colour[1];
+        RenderPassColourTarget depth;
+        RenderPassColourTarget stencil;
         VulkanFrameBufferDescKey();
         VulkanFrameBufferDescKey( const RenderPassDescriptor &desc );
 
@@ -88,9 +107,27 @@ namespace Ogre
     typedef map<VulkanFrameBufferDescKey, VulkanFrameBufferDescValue>::type VulkanFrameBufferDescMap;
     typedef map<FrameBufferDescKey, VulkanFlushOnlyDescValue>::type VulkanFlushOnlyDescMap;
 
-    class _OgreVulkanExport VulkanRenderPassDescriptor : public RenderPassDescriptor
+    class _OgreVulkanExport VulkanRenderPassDescriptor
     {
+    public:
+        RenderPassColourTarget mColour[1];
+        RenderPassColourTarget mDepth;
+        RenderPassColourTarget mStencil;
+        uint8                   mNumColourEntries = 1;
     protected:
+        /// When true, if we have a RenderWindow among our colour entries, then this
+        /// pass is the last one to render to it and should ready the surface for
+        /// presentation/swapping. After changing this flag you MUST call entriesModified( Colour );
+        ///
+        /// This value will be automatically reset to false if no entry is a RenderWindow
+        public: bool            mReadyWindowForPresent = true;
+
+        /// When true, beginRenderPassDescriptor & endRenderPassDescriptor won't actually
+        /// load/store this pass descriptor; but will still set the mCurrentRenderPassDescriptor
+        /// so we have required information by some passes.
+        /// Examples of these are stencil passes.
+        public: bool            mInformationOnly = false;
+
         // 1 per MRT
         // 1 per MRT MSAA resolve
         // 1 for Depth buffer
@@ -151,6 +188,15 @@ namespace Ogre
         bool cannotInterruptRendering( void ) const;
 
     public:
+        enum {
+            All = 1,
+            Colour0 = All,
+            Depth = All,
+            Stencil = All
+        };
+
+        void checkWarnIfRtvWasFlushed( uint32 entriesToFlush ) {}
+
         VulkanRenderPassDescriptor( VulkanQueue *graphicsQueue, VulkanRenderSystem *renderSystem );
         virtual ~VulkanRenderPassDescriptor();
 

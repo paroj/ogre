@@ -28,17 +28,9 @@ THE SOFTWARE.
 
 #include "OgreVulkanDescriptorSets.h"
 
-#include "OgreVulkanDelayedFuncs.h"
 #include "OgreVulkanTextureGpu.h"
 #include "OgreVulkanTextureGpuManager.h"
 #include "OgreVulkanUtils.h"
-#include "Vao/OgreVulkanReadOnlyBufferPacked.h"
-#include "Vao/OgreVulkanTexBufferPacked.h"
-#include "Vao/OgreVulkanUavBufferPacked.h"
-
-#include "OgreDescriptorSetSampler.h"
-#include "OgreDescriptorSetUav.h"
-#include "OgreHlmsSamplerblock.h"
 
 namespace Ogre
 {
@@ -67,7 +59,7 @@ namespace Ogre
         makeVkStruct( mWriteDescSet, VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET );
         mWriteDescSet.descriptorCount = static_cast<uint32>( mSamplers.size() );
         mWriteDescSet.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-        mWriteDescSet.pImageInfo = mSamplers.begin();
+        mWriteDescSet.pImageInfo = mSamplers.data();
     }
     //-------------------------------------------------------------------------
     //-------------------------------------------------------------------------

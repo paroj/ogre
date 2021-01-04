@@ -28,11 +28,12 @@ THE SOFTWARE.
 
 #include "OgreVulkanRenderSystem.h"
 
-#include "OgreRenderPassDescriptor.h"
+#include "OgreGpuProgramManager.h"
+#include "OgreViewport.h"
+
+#include "OgreVulkanRenderPassDescriptor.h"
 #include "OgreVulkanCache.h"
-#include "OgreVulkanDelayedFuncs.h"
 #include "OgreVulkanDevice.h"
-#include "OgreVulkanGpuProgramManager.h"
 #include "OgreVulkanMappings.h"
 #include "OgreVulkanProgramFactory.h"
 #include "OgreVulkanRenderPassDescriptor.h"
@@ -42,42 +43,21 @@ THE SOFTWARE.
 #include "OgreVulkanTextureGpuManager.h"
 #include "OgreVulkanUtils.h"
 #include "OgreVulkanWindow.h"
-#include "Vao/OgreVulkanVaoManager.h"
-
 #include "OgreDefaultHardwareBufferManager.h"
-#include "Vao/OgreVertexArrayObject.h"
-
-#include "CommandBuffer/OgreCbDrawCall.h"
-
 #include "OgreVulkanHlmsPso.h"
-#include "Vao/OgreIndirectBufferPacked.h"
-#include "Vao/OgreVulkanBufferInterface.h"
-#include "Vao/OgreVulkanConstBufferPacked.h"
-#include "Vao/OgreVulkanTexBufferPacked.h"
-
+#include "OgreVulkanHardwareBufferCommon.h"
 #include "OgreVulkanHardwareBufferManager.h"
-#include "OgreVulkanHardwareIndexBuffer.h"
-#include "OgreVulkanHardwareVertexBuffer.h"
-
 #include "OgreVulkanDescriptorSets.h"
-
-#include "OgreVulkanHardwareIndexBuffer.h"
-#include "OgreVulkanHardwareVertexBuffer.h"
 #include "OgreVulkanTextureGpu.h"
-#include "Vao/OgreVulkanUavBufferPacked.h"
 
 #include "OgreDepthBuffer.h"
 #include "OgreRoot.h"
 
-#if OGRE_PLATFORM == OGRE_PLATFORM_WIN32
-#    include "Windowing/win32/OgreVulkanWin32Window.h"
-#elif OGRE_PLATFORM == OGRE_PLATFORM_ANDROID
-#    include "Windowing/Android/OgreVulkanAndroidWindow.h"
-#else
-#    include "Windowing/X11/OgreVulkanXcbWindow.h"
-#endif
+#include "OgreVulkanWindow.h"
+#include "OgrePixelFormat.h"
 
-#include "OgrePixelFormatGpuUtils.h"
+#   include <xcb/xcb.h>
+#    include "vulkan/vulkan_xcb.h"
 
 #define TODO_addVpCount_to_passpso
 
@@ -153,7 +133,6 @@ namespace Ogre
         mInitialized( false ),
         mHardwareBufferManager( 0 ),
         mIndirectBuffer( 0 ),
-        mShaderManager( 0 ),
         mVulkanProgramFactory0( 0 ),
         mVulkanProgramFactory1( 0 ),
         mVulkanProgramFactory2( 0 ),
@@ -165,8 +144,6 @@ namespace Ogre
         mActiveDevice( 0 ),
         mDevice( 0 ),
         mCache( 0 ),
-        mPso( 0 ),
-        mComputePso( 0 ),
         mStencilRefValue( 0u ),
         mStencilEnabled( false ),
         mTableDirty( false ),
@@ -179,16 +156,7 @@ namespace Ogre
         mVpChanged( false ),
         mInterruptedRenderCommandEncoder( false ),
         mValidationError( false ),
-#if OGRE_PLATFORM == OGRE_PLATFORM_WIN32
-        mHasWin32Support( false ),
-#elif OGRE_PLATFORM == OGRE_PLATFORM_ANDROID
-        mHasAndroidSupport( false ),
-#else
-        mHasXcbSupport( false ),
-#endif
-#if OGRE_DEBUG_MODE >= OGRE_DEBUG_HIGH
         mHasValidationLayers( false ),
-#endif
         CreateDebugReportCallback( 0 ),
         DestroyDebugReportCallback( 0 ),
         mDebugReportCallback( 0 )
@@ -205,9 +173,7 @@ namespace Ogre
             mComputeTable.textures[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         }
 
-        mInvertedClipSpaceY = true;
-
-        mVulkanSupport = Ogre::getVulkanSupport();
+        mVulkanSupport = new VulkanSupport();
 
         initConfigOptions();
     }
@@ -241,11 +207,11 @@ namespace Ogre
             return;
 
         mDevice->stall();
-
+#if 0
         {
             // Remove all windows.
             // (destroy primary window last since others may depend on it)
-            Window *primary = 0;
+            RenderWindow *primary = 0;
             WindowSet::const_iterator itor = mWindows.begin();
             WindowSet::const_iterator endt = mWindows.end();
 
@@ -269,7 +235,7 @@ namespace Ogre
                          "destroyAllRenderPassDescriptors followed by _cleanupDepthBuffers should've "
                          "emptied mSharedDepthBufferRefs. Please report this bug to "
                          "https://github.com/OGRECave/ogre-next/issues/" );
-
+#endif
         if( mDummySampler )
         {
             vkDestroySampler( mActiveDevice->mDevice, mDummySampler, 0 );
@@ -284,13 +250,13 @@ namespace Ogre
 
         if( mDummyTexBuffer )
         {
-            mVaoManager->destroyTexBuffer( mDummyTexBuffer );
+            //mVaoManager->destroyTexBuffer( mDummyTexBuffer );
             mDummyTexBuffer = 0;
         }
 
         if( mDummyBuffer )
         {
-            mVaoManager->destroyConstBuffer( mDummyBuffer );
+            //mVaoManager->destroyConstBuffer( mDummyBuffer );
             mDummyBuffer = 0;
         }
 
@@ -300,22 +266,17 @@ namespace Ogre
         OGRE_DELETE mCache;
         mCache = 0;
 
-        OGRE_DELETE mShaderManager;
-        mShaderManager = 0;
+        OGRE_DELETE mTextureManager;
+        mTextureManager = 0;
 
-        OGRE_DELETE mTextureGpuManager;
-        mTextureGpuManager = 0;
-        OGRE_DELETE mVaoManager;
-        mVaoManager = 0;
-
-        OGRE_DELETE mVulkanProgramFactory3;  // LIFO destruction order
+        /*OGRE_DELETE mVulkanProgramFactory3;  // LIFO destruction order
         mVulkanProgramFactory3 = 0;
         OGRE_DELETE mVulkanProgramFactory2;
         mVulkanProgramFactory2 = 0;
         OGRE_DELETE mVulkanProgramFactory1;
         mVulkanProgramFactory1 = 0;
         OGRE_DELETE mVulkanProgramFactory0;
-        mVulkanProgramFactory0 = 0;
+        mVulkanProgramFactory0 = 0;*/
 
         VkDevice vkDevice = mDevice->mDevice;
         delete mDevice;
@@ -334,21 +295,65 @@ namespace Ogre
         static String strName( "Vulkan_RS" );
         return strName;
     }
-    void VulkanRenderSystem::initConfigOptions( void ) { mVulkanSupport->addConfig( this ); }
-    //-------------------------------------------------------------------------
-    ConfigOptionMap &VulkanRenderSystem::getConfigOptions( void )
+    void VulkanRenderSystem::initConfigOptions( void )
     {
-        return mVulkanSupport->getConfigOptions( this );
+        mVulkanSupport->addConfig( this );
+        mOptions = mVulkanSupport->getConfigOptions(this);
+        RenderSystem::initConfigOptions();
     }
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::setConfigOption( const String &name, const String &value )
     {
-        mVulkanSupport->setConfigOption( name, value );
+        ConfigOptionMap::iterator it = mOptions.find( name );
+
+        if( name == "Full Screen" )
+        {
+            it = mOptions.find( "Display Frequency" );
+            if( value == "No" )
+            {
+                it->second.currentValue = "N/A";
+                it->second.immutable = true;
+            }
+            else
+            {
+                if( ( it->second.currentValue.empty() || it->second.currentValue == "N/A" ) &&
+                    !it->second.possibleValues.empty() )
+                {
+                    it->second.currentValue = it->second.possibleValues.front();
+                }
+                it->second.immutable = false;
+            }
+        }
+
+        if( name == "VSync" )
+        {
+            it = mOptions.find( "VSync Method" );
+            if( !StringConverter::parseBool( value ) )
+            {
+                it->second.currentValue = "N/A";
+                it->second.immutable = true;
+            }
+            else
+            {
+                it->second.currentValue = it->second.possibleValues.front();
+                it->second.immutable = false;
+            }
+        }
+
+        if( it == mOptions.end() )
+        {
+            OGRE_EXCEPT( Exception::ERR_INVALIDPARAMS, "Option named " + name + " does not exist.",
+                         "VulkanSupport::setConfigOption" );
+        }
+        else
+        {
+            it->second.currentValue = value;
+        }
     }
     //-------------------------------------------------------------------------
     String VulkanRenderSystem::validateConfigOptions( void )
     {
-        return mVulkanSupport->validateConfigOptions();
+        return mVulkanSupport->validateConfigOptions(this);
     }
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::debugCallback( void ) { mValidationError = true; }
@@ -474,7 +479,7 @@ namespace Ogre
             rsc->setVendor( GPU_QUALCOMM );
             break;
         case 0x1010:
-            rsc->setVendor( GPU_IMGTEC );  // PowerVR
+            rsc->setVendor( GPU_IMAGINATION_TECHNOLOGIES );  // PowerVR
             break;
         }
 
@@ -489,8 +494,8 @@ namespace Ogre
             rsc->setDriverVersion( driverVersion );
         }
 
-        if( mActiveDevice->mDeviceFeatures.imageCubeArray )
-            rsc->setCapability( RSC_TEXTURE_CUBE_MAP_ARRAY );
+        //if( mActiveDevice->mDeviceFeatures.imageCubeArray )
+        //    rsc->setCapability( RSC_TEXTURE_CUBE_MAP_ARRAY );
 
         if( mActiveDevice->mDeviceFeatures.depthClamp )
             rsc->setCapability( RSC_DEPTH_CLAMP );
@@ -499,23 +504,23 @@ namespace Ogre
             VkFormatProperties props;
 
             vkGetPhysicalDeviceFormatProperties( mDevice->mPhysicalDevice,
-                                                 VulkanMappings::get( PFG_BC1_UNORM ), &props );
+                                                 VulkanMappings::get( PF_DXT1 ), &props );
             if( props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT )
                 rsc->setCapability( RSC_TEXTURE_COMPRESSION_DXT );
 
             vkGetPhysicalDeviceFormatProperties( mDevice->mPhysicalDevice,
-                                                 VulkanMappings::get( PFG_BC4_UNORM ), &props );
+                                                 VulkanMappings::get( PF_BC4_UNORM ), &props );
             if( props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT )
                 rsc->setCapability( RSC_TEXTURE_COMPRESSION_BC4_BC5 );
 
             vkGetPhysicalDeviceFormatProperties( mDevice->mPhysicalDevice,
-                                                 VulkanMappings::get( PFG_BC6H_UF16 ), &props );
+                                                 VulkanMappings::get( PF_BC6H_UF16 ), &props );
             if( props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT )
                 rsc->setCapability( RSC_TEXTURE_COMPRESSION_BC6H_BC7 );
 
             // Vulkan doesn't allow supporting ETC1 without ETC2
             vkGetPhysicalDeviceFormatProperties( mDevice->mPhysicalDevice,
-                                                 VulkanMappings::get( PFG_ETC2_RGB8_UNORM ), &props );
+                                                 VulkanMappings::get( PF_ETC2_RGB8 ), &props );
             if( props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT )
             {
                 rsc->setCapability( RSC_TEXTURE_COMPRESSION_ETC1 );
@@ -523,21 +528,21 @@ namespace Ogre
             }
 
             vkGetPhysicalDeviceFormatProperties( mDevice->mPhysicalDevice,
-                                                 VulkanMappings::get( PFG_PVRTC_RGB2 ), &props );
+                                                 VulkanMappings::get( PF_PVRTC_RGB2 ), &props );
             if( props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT )
                 rsc->setCapability( RSC_TEXTURE_COMPRESSION_PVRTC );
 
             vkGetPhysicalDeviceFormatProperties(
-                mDevice->mPhysicalDevice, VulkanMappings::get( PFG_ASTC_RGBA_UNORM_4X4_LDR ), &props );
+                mDevice->mPhysicalDevice, VulkanMappings::get( PF_ASTC_RGBA_4X4_LDR ), &props );
             if( props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT )
                 rsc->setCapability( RSC_TEXTURE_COMPRESSION_ASTC );
         }
 
         const VkPhysicalDeviceLimits &deviceLimits = mDevice->mDeviceProperties.limits;
-        rsc->setMaximumResolutions( deviceLimits.maxImageDimension2D, deviceLimits.maxImageDimension3D,
-                                    deviceLimits.maxImageDimensionCube );
-        rsc->setMaxThreadsPerThreadgroupAxis( deviceLimits.maxComputeWorkGroupSize );
-        rsc->setMaxThreadsPerThreadgroup( deviceLimits.maxComputeWorkGroupInvocations );
+        //rsc->setMaximumResolutions( deviceLimits.maxImageDimension2D, deviceLimits.maxImageDimension3D,
+        //                            deviceLimits.maxImageDimensionCube );
+        //rsc->setMaxThreadsPerThreadgroupAxis( deviceLimits.maxComputeWorkGroupSize );
+        //rsc->setMaxThreadsPerThreadgroup( deviceLimits.maxComputeWorkGroupInvocations );
 
         if( mActiveDevice->mDeviceFeatures.samplerAnisotropy && deviceLimits.maxSamplerAnisotropy > 1u )
         {
@@ -545,29 +550,22 @@ namespace Ogre
             rsc->setMaxSupportedAnisotropy( deviceLimits.maxSamplerAnisotropy );
         }
 
-        rsc->setCapability( RSC_STORE_AND_MULTISAMPLE_RESOLVE );
-        rsc->setCapability( RSC_TEXTURE_GATHER );
+        //rsc->setCapability( RSC_STORE_AND_MULTISAMPLE_RESOLVE );
+        //rsc->setCapability( RSC_TEXTURE_GATHER );
 
         rsc->setCapability( RSC_COMPUTE_PROGRAM );
-        rsc->setCapability( RSC_UAV );
-        rsc->setCapability( RSC_TYPED_UAV_LOADS );
-        rsc->setCapability( RSC_EXPLICIT_FSAA_RESOLVE );
+        //rsc->setCapability( RSC_UAV );
+        //rsc->setCapability( RSC_TYPED_UAV_LOADS );
+        //rsc->setCapability( RSC_EXPLICIT_FSAA_RESOLVE );
         rsc->setCapability( RSC_TEXTURE_1D );
 
         rsc->setCapability( RSC_HWSTENCIL );
         rsc->setStencilBufferBitDepth( 8 );
         rsc->setNumTextureUnits( NUM_BIND_TEXTURES );
-        rsc->setCapability( RSC_AUTOMIPMAP );
-        rsc->setCapability( RSC_BLENDING );
-        rsc->setCapability( RSC_DOT3 );
-        rsc->setCapability( RSC_CUBEMAPPING );
         rsc->setCapability( RSC_TEXTURE_COMPRESSION );
-        rsc->setCapability( RSC_VBO );
         rsc->setCapability( RSC_TWO_SIDED_STENCIL );
         rsc->setCapability( RSC_STENCIL_WRAP );
         rsc->setCapability( RSC_USER_CLIP_PLANES );
-        rsc->setCapability( RSC_VERTEX_FORMAT_UBYTE4 );
-        rsc->setCapability( RSC_INFINITE_FAR_PLANE );
         rsc->setCapability( RSC_TEXTURE_3D );
         rsc->setCapability( RSC_NON_POWER_OF_2_TEXTURES );
         rsc->setNonPOW2TexturesLimited( false );
@@ -576,15 +574,15 @@ namespace Ogre
         rsc->setCapability( RSC_POINT_SPRITES );
         rsc->setCapability( RSC_POINT_EXTENDED_PARAMETERS );
         rsc->setCapability( RSC_TEXTURE_2D_ARRAY );
-        rsc->setCapability( RSC_CONST_BUFFER_SLOTS_IN_SHADER );
-        rsc->setCapability( RSC_SEPARATE_SAMPLERS_FROM_TEXTURES );
+        //rsc->setCapability( RSC_CONST_BUFFER_SLOTS_IN_SHADER );
+        //rsc->setCapability( RSC_SEPARATE_SAMPLERS_FROM_TEXTURES );
         rsc->setCapability( RSC_ALPHA_TO_COVERAGE );
         rsc->setCapability( RSC_HW_GAMMA );
         rsc->setCapability( RSC_VERTEX_BUFFER_INSTANCE_DATA );
-        rsc->setCapability( RSC_EXPLICIT_API );
+        //rsc->setCapability( RSC_EXPLICIT_API );
         rsc->setMaxPointSize( 256 );
 
-        rsc->setMaximumResolutions( 16384, 4096, 16384 );
+        //rsc->setMaximumResolutions( 16384, 4096, 16384 );
 
         rsc->setVertexProgramConstantFloatCount( 256u );
         rsc->setVertexProgramConstantIntCount( 256u );
@@ -605,10 +603,7 @@ namespace Ogre
         rsc->setComputeProgramConstantIntCount( 256u );
         rsc->setComputeProgramConstantBoolCount( 256u );
 
-        rsc->addShaderProfile( "hlslvk" );
-        rsc->addShaderProfile( "hlsl" );
-        rsc->addShaderProfile( "glslvk" );
-        rsc->addShaderProfile( "glsl" );
+        rsc->addShaderProfile( "spirv" );
 
         if( rsc->getVendor() == GPU_QUALCOMM )
         {
@@ -660,13 +655,14 @@ namespace Ogre
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::resetAllBindings( void )
     {
+#if 0
         OGRE_ASSERT_HIGH( dynamic_cast<VulkanConstBufferPacked *>( mDummyBuffer ) );
         VulkanConstBufferPacked *constBuffer = static_cast<VulkanConstBufferPacked *>( mDummyBuffer );
 
         VkDescriptorBufferInfo dummyBufferInfo;
         constBuffer->getBufferInfo( dummyBufferInfo );
 
-        for( size_t i = 0u; i < NumShaderTypes + 1u; ++i )
+        for( size_t i = 0u; i < GPT_COUNT; ++i )
         {
             mGlobalTable.paramsBuffer[i] = dummyBufferInfo;
             mComputeTable.paramsBuffer[i] = dummyBufferInfo;
@@ -709,12 +705,7 @@ namespace Ogre
         mComputeTable.setAllDirty();
         mTableDirty = true;
         mComputeTableDirty = true;
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::reinitialise( void )
-    {
-        this->shutdown();
-        this->_initialise( true );
+#endif
     }
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::initializeVkInstance( void )
@@ -731,7 +722,7 @@ namespace Ogre
         FastArray<VkExtensionProperties> availableExtensions;
         availableExtensions.resize( numExtensions );
         result =
-            vkEnumerateInstanceExtensionProperties( 0, &numExtensions, availableExtensions.begin() );
+            vkEnumerateInstanceExtensionProperties( 0, &numExtensions, availableExtensions.data() );
         checkVkResult( result, "vkEnumerateInstanceExtensionProperties" );
 
         // Check supported extensions we may want
@@ -744,41 +735,23 @@ namespace Ogre
 #if OGRE_PLATFORM == OGRE_PLATFORM_WIN32
             if( extensionName == VulkanWin32Window::getRequiredExtensionName() )
             {
-                mHasWin32Support = true;
                 reqInstanceExtensions.push_back( VulkanWin32Window::getRequiredExtensionName() );
             }
 #elif OGRE_PLATFORM == OGRE_PLATFORM_ANDROID
             if( extensionName == VulkanAndroidWindow::getRequiredExtensionName() )
             {
-                mHasAndroidSupport = true;
                 reqInstanceExtensions.push_back( VulkanAndroidWindow::getRequiredExtensionName() );
             }
 #else
-            if( extensionName == VulkanXcbWindow::getRequiredExtensionName() )
+            if( extensionName == VK_KHR_XCB_SURFACE_EXTENSION_NAME )
             {
-                mHasXcbSupport = true;
-                reqInstanceExtensions.push_back( VulkanXcbWindow::getRequiredExtensionName() );
+                reqInstanceExtensions.push_back( VK_KHR_XCB_SURFACE_EXTENSION_NAME );
             }
 #endif
-#if OGRE_DEBUG_MODE >= OGRE_DEBUG_HIGH
+#if 1 //OGRE_DEBUG_MODE
             if( extensionName == VK_EXT_DEBUG_REPORT_EXTENSION_NAME )
                 reqInstanceExtensions.push_back( VK_EXT_DEBUG_REPORT_EXTENSION_NAME );
 #endif
-        }
-
-#if OGRE_PLATFORM == OGRE_PLATFORM_WIN32
-        if( !mHasWin32Support )
-#elif OGRE_PLATFORM == OGRE_PLATFORM_ANDROID
-        if( !mHasAndroidSupport )
-#else
-        if( !mHasXcbSupport )
-#endif
-        {
-            LogManager::getSingleton().logMessage(
-                "Vulkan support found but instance is uncapable of "
-                "drawing to the screen! Cannot continue",
-                LML_CRITICAL );
-            return;
         }
 
         // Check supported layers we may want
@@ -788,7 +761,7 @@ namespace Ogre
 
         FastArray<VkLayerProperties> instanceLayerProps;
         instanceLayerProps.resize( numInstanceLayers );
-        result = vkEnumerateInstanceLayerProperties( &numInstanceLayers, instanceLayerProps.begin() );
+        result = vkEnumerateInstanceLayerProperties( &numInstanceLayers, instanceLayerProps.data() );
         checkVkResult( result, "vkEnumerateInstanceLayerProperties" );
 
         FastArray<const char *> instanceLayers;
@@ -796,7 +769,7 @@ namespace Ogre
         {
             const String layerName = instanceLayerProps[i].layerName;
             LogManager::getSingleton().logMessage( "Found instance layer: " + layerName );
-#if OGRE_DEBUG_MODE >= OGRE_DEBUG_HIGH
+#if 1 //OGRE_DEBUG_MODE
             if( layerName == "VK_LAYER_KHRONOS_validation" )
             {
                 mHasValidationLayers = true;
@@ -805,88 +778,41 @@ namespace Ogre
 #endif
         }
 
-#if OGRE_DEBUG_MODE >= OGRE_DEBUG_HIGH
         if( !mHasValidationLayers )
         {
-            LogManager::getSingleton().logMessage(
-                "WARNING: VK_LAYER_KHRONOS_validation layer not present. "
+            LogManager::getSingleton().logWarning(
+                "VK_LAYER_KHRONOS_validation layer not present. "
                 "Extension " VK_EXT_DEBUG_MARKER_EXTENSION_NAME " not found",
                 LML_CRITICAL );
         }
-#endif
 
         mVkInstance = VulkanDevice::createInstance(
-            Root::getSingleton().getAppName(), reqInstanceExtensions, instanceLayers, dbgFunc, this );
+            "OgreApp", reqInstanceExtensions, instanceLayers, dbgFunc, this );
 
-#if OGRE_DEBUG_MODE >= OGRE_DEBUG_HIGH
+#if 1 //OGRE_DEBUG_MODE
         addInstanceDebugCallback();
 #endif
     }
     //-------------------------------------------------------------------------
-    Window *VulkanRenderSystem::_initialise( bool autoCreateWindow, const String &windowTitle )
-    {
-        Window *autoWindow = 0;
-        if( autoCreateWindow )
-        {
-            NameValuePairList miscParams;
-
-            bool bFullscreen = false;
-            uint32 w = 800, h = 600;
-
-            const ConfigOptionMap &options = mVulkanSupport->getConfigOptions( this );
-            ConfigOptionMap::const_iterator opt;
-            ConfigOptionMap::const_iterator end = options.end();
-
-            if( ( opt = options.find( "Full Screen" ) ) != end )
-                bFullscreen = ( opt->second.currentValue == "Yes" );
-            if( ( opt = options.find( "Video Mode" ) ) != end )
-            {
-                String val = opt->second.currentValue;
-                String::size_type pos = val.find( 'x' );
-
-                if( pos != String::npos )
-                {
-                    w = StringConverter::parseUnsignedInt( val.substr( 0, pos ) );
-                    h = StringConverter::parseUnsignedInt( val.substr( pos + 1 ) );
-                }
-            }
-            if( ( opt = options.find( "FSAA" ) ) != end )
-                miscParams["FSAA"] = opt->second.currentValue;
-            if( ( opt = options.find( "VSync" ) ) != end )
-                miscParams["vsync"] = opt->second.currentValue;
-            if( ( opt = options.find( "sRGB Gamma Conversion" ) ) != end )
-                miscParams["gamma"] = opt->second.currentValue;
-            if( ( opt = options.find( "VSync Method" ) ) != end )
-                miscParams["vsync_method"] = opt->second.currentValue;
-
-            autoWindow = _createRenderWindow( windowTitle, w, h, bFullscreen, &miscParams );
-        }
-        RenderSystem::_initialise( autoCreateWindow, windowTitle );
-
-        return autoWindow;
-    }
-    //-------------------------------------------------------------------------
-    Window *VulkanRenderSystem::_createRenderWindow( const String &name, uint32 width, uint32 height,
+    RenderWindow *VulkanRenderSystem::_createRenderWindow( const String &name, uint32 width, uint32 height,
                                                      bool fullScreen,
                                                      const NameValuePairList *miscParams )
     {
-#if OGRE_PLATFORM == OGRE_PLATFORM_WIN32
-        VulkanWindow *win = OGRE_NEW VulkanWin32Window( name, width, height, fullScreen );
-#elif OGRE_PLATFORM == OGRE_PLATFORM_ANDROID
-        VulkanWindow *win = OGRE_NEW VulkanAndroidWindow( name, width, height, fullScreen );
-#else
-        VulkanWindow *win = OGRE_NEW VulkanXcbWindow( name, width, height, fullScreen );
-#endif
-        mWindows.insert( win );
+        RenderSystem::_createRenderWindow(name, width, height, fullScreen, miscParams);
+
+        VulkanWindow *win = OGRE_NEW VulkanWindow( name, width, height, fullScreen );
+        attachRenderTarget((Ogre::RenderTarget&) *win);
 
         if( !mInitialized )
         {
+#if 0
             if( miscParams )
             {
                 NameValuePairList::const_iterator itOption = miscParams->find( "reverse_depth" );
                 if( itOption != miscParams->end() )
                     mReverseDepth = StringConverter::parseBool( itOption->second, true );
             }
+#endif
 
             initializeVkInstance();
 
@@ -910,7 +836,7 @@ namespace Ogre
                 FastArray<VkExtensionProperties> availableExtensions;
                 availableExtensions.resize( numExtensions );
                 vkEnumerateDeviceExtensionProperties( mDevice->mPhysicalDevice, 0, &numExtensions,
-                                                      availableExtensions.begin() );
+                                                      availableExtensions.data() );
                 for( size_t i = 0u; i < numExtensions; ++i )
                 {
                     const String extensionName = availableExtensions[i].extensionName;
@@ -934,23 +860,22 @@ namespace Ogre
                     "the GPU should support, but it's not guaranteed to work" );
             }
 
-#if OGRE_DEBUG_MODE >= OGRE_DEBUG_HIGH
+#if 1 //OGRE_DEBUG_MODE
             if( mHasValidationLayers )
                 deviceExtensions.push_back( VK_EXT_DEBUG_MARKER_EXTENSION_NAME );
 #endif
 
             mDevice->createDevice( deviceExtensions, 0u, 0u );
 
-            VulkanVaoManager *vaoManager = OGRE_NEW VulkanVaoManager( mDevice, this, miscParams );
-            mVaoManager = vaoManager;
-            mHardwareBufferManager = OGRE_NEW v1::VulkanHardwareBufferManager( mDevice, mVaoManager );
+            mHardwareBufferManager = OGRE_NEW v1::VulkanHardwareBufferManager( mDevice );
 
-            mActiveDevice->mVaoManager = vaoManager;
+            // mActiveDevice->mVaoManager = vaoManager;
             mActiveDevice->initQueues();
-            vaoManager->initDrawIdVertexBuffer();
+            //vaoManager->initDrawIdVertexBuffer();
 
-            FastArray<PixelFormatGpu> depthFormatCandidates( 5u );
-            if( PixelFormatGpuUtils::isStencil( DepthBuffer::DefaultDepthBufferFormat ) )
+            FastArray<PixelFormat> depthFormatCandidates;
+#if 0
+            if( PixelUtil::isStencil( DepthBuffer::DefaultDepthBufferFormat ) )
             {
                 depthFormatCandidates.push_back( PFG_D32_FLOAT_S8X24_UINT );
                 depthFormatCandidates.push_back( PFG_D24_UNORM_S8_UINT );
@@ -959,30 +884,27 @@ namespace Ogre
                 depthFormatCandidates.push_back( PFG_D16_UNORM );
             }
             else
+#endif
             {
-                depthFormatCandidates.push_back( PFG_D32_FLOAT );
-                depthFormatCandidates.push_back( PFG_D24_UNORM );
-                depthFormatCandidates.push_back( PFG_D32_FLOAT_S8X24_UINT );
-                depthFormatCandidates.push_back( PFG_D24_UNORM_S8_UINT );
-                depthFormatCandidates.push_back( PFG_D16_UNORM );
+                depthFormatCandidates.push_back( PF_DEPTH32F);
+                depthFormatCandidates.push_back( PF_DEPTH16 );
             }
 
-            DepthBuffer::DefaultDepthBufferFormat = findSupportedFormat(
+            PixelFormat df = findSupportedFormat(
                 mDevice->mPhysicalDevice, depthFormatCandidates, VK_IMAGE_TILING_OPTIMAL,
                 VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT );
-
             VulkanTextureGpuManager *textureGpuManager = OGRE_NEW VulkanTextureGpuManager(
-                vaoManager, this, mDevice, bCanRestrictImageViewUsage );
-            mTextureGpuManager = textureGpuManager;
-
+                NULL, this, mDevice, bCanRestrictImageViewUsage );
+            mTextureManager = textureGpuManager;
+#if 0
             uint32 dummyData = 0u;
-            mDummyBuffer = vaoManager->createConstBuffer( 4u, BT_IMMUTABLE, &dummyData, false );
-            mDummyTexBuffer =
-                vaoManager->createTexBuffer( PFG_RGBA8_UNORM, 4u, BT_IMMUTABLE, &dummyData, false );
+            //mDummyBuffer = vaoManager->createConstBuffer( 4u, BT_IMMUTABLE, &dummyData, false );
+            //mDummyTexBuffer =
+            //    vaoManager->createTexBuffer( PFG_RGBA8_UNORM, 4u, BT_IMMUTABLE, &dummyData, false );
 
             {
                 VkImage dummyImage =
-                    textureGpuManager->getBlankTextureVulkanName( TextureTypes::Type2D );
+                    textureGpuManager->getBlankTextureVulkanName( TEX_TYPE_2D );
 
                 VkImageViewCreateInfo imageViewCi;
                 makeVkStruct( imageViewCi, VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO );
@@ -997,7 +919,7 @@ namespace Ogre
                     vkCreateImageView( mActiveDevice->mDevice, &imageViewCi, 0, &mDummyTextureView );
                 checkVkResult( result, "vkCreateImageView" );
             }
-
+#endif
             {
                 VkSamplerCreateInfo samplerDescriptor;
                 makeVkStruct( samplerDescriptor, VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO );
@@ -1015,18 +937,20 @@ namespace Ogre
             resetAllBindings();
 
             String workaroundsStr;
-            Workarounds::dump( (void *)&workaroundsStr );
+            //Workarounds::dump( (void *)&workaroundsStr );
             if( !workaroundsStr.empty() )
             {
                 workaroundsStr = "Workarounds applied:" + workaroundsStr;
                 LogManager::getSingleton().logMessage( workaroundsStr );
             }
 
+            mCurrentRenderPassDescriptor = createRenderPassDescriptor();
+
             mInitialized = true;
         }
 
         win->_setDevice( mActiveDevice );
-        win->_initialize( mTextureGpuManager, miscParams );
+        win->create( name, width, height, fullScreen, miscParams );
 
         return win;
     }
@@ -1035,10 +959,8 @@ namespace Ogre
     {
         v1::VulkanHardwareBufferManager *hwBufferMgr =
             static_cast<v1::VulkanHardwareBufferManager *>( mHardwareBufferManager );
-        VulkanVaoManager *vaoManager = static_cast<VulkanVaoManager *>( mVaoManager );
 
         hwBufferMgr->_notifyDeviceStalled();
-        vaoManager->_notifyDeviceStalled();
     }
     //-------------------------------------------------------------------------
     String VulkanRenderSystem::getErrorDescription( long errorNumber ) const { return BLANKSTRING; }
@@ -1063,40 +985,6 @@ namespace Ogre
                                                   Real linear, Real quadratic, Real minSize,
                                                   Real maxSize )
     {
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::flushUAVs( void )
-    {
-        if( mUavRenderingDirty )
-        {
-            if( !mUavRenderingDescSet )
-            {
-                if( mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::UavBuffers] )
-                {
-                    mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::UavBuffers] = 0;
-                    mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::UavTextures] = 0;
-                    mGlobalTable.dirtyBakedUavs = true;
-                    mTableDirty = true;
-                }
-            }
-            else
-            {
-                VulkanDescriptorSetUav *vulkanSet =
-                    reinterpret_cast<VulkanDescriptorSetUav *>( mUavRenderingDescSet->mRsData );
-                if( mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::UavBuffers] !=
-                    &vulkanSet->mWriteDescSets[0] )
-                {
-                    mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::UavBuffers] =
-                        &vulkanSet->mWriteDescSets[0];
-                    mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::UavTextures] =
-                        &vulkanSet->mWriteDescSets[1];
-                    mGlobalTable.dirtyBakedUavs = true;
-                    mTableDirty = true;
-                }
-            }
-
-            mUavRenderingDirty = false;
-        }
     }
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::_setParamBuffer( GpuProgramType shaderStage,
@@ -1192,7 +1080,7 @@ namespace Ogre
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::_setCurrentDeviceFromTexture( TextureGpu *texture ) {}
     //-------------------------------------------------------------------------
-#if OGRE_DEBUG_MODE >= OGRE_DEBUG_HIGH
+#if OGRE_DEBUG_MODE
     static void checkTextureLayout( const TextureGpu *texture,
                                     RenderPassDescriptor *currentRenderPassDescriptor )
     {
@@ -1217,14 +1105,15 @@ namespace Ogre
     }
 #endif
     //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_setTexture( size_t unit, TextureGpu *texPtr, bool bDepthReadOnly )
+    void VulkanRenderSystem::_setTexture( size_t unit, bool enabled, const TexturePtr& texPtr )
     {
         OGRE_ASSERT_MEDIUM( unit < NUM_BIND_TEXTURES );
+#if 0
         if( texPtr )
         {
             VulkanTextureGpu *tex = static_cast<VulkanTextureGpu *>( texPtr );
 
-#if OGRE_DEBUG_MODE >= OGRE_DEBUG_HIGH
+#if OGRE_DEBUG_MODE
             checkTextureLayout( tex, mCurrentRenderPassDescriptor );
 #endif
             const VkImageLayout targetLayout = bDepthReadOnly
@@ -1253,154 +1142,7 @@ namespace Ogre
                 mTableDirty = true;
             }
         }
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_setTextures( uint32 slotStart, const DescriptorSetTexture *set,
-                                           uint32 hazardousTexIdx )
-    {
-#if OGRE_DEBUG_MODE >= OGRE_DEBUG_HIGH
-        {
-            FastArray<const TextureGpu *>::const_iterator itor = set->mTextures.begin();
-            FastArray<const TextureGpu *>::const_iterator endt = set->mTextures.end();
-
-            while( itor != endt )
-            {
-                checkTextureLayout( *itor, mCurrentRenderPassDescriptor );
-                ++itor;
-            }
-        }
 #endif
-        VulkanDescriptorSetTexture *vulkanSet =
-            reinterpret_cast<VulkanDescriptorSetTexture *>( set->mRsData );
-
-        VkWriteDescriptorSet *writeDescSet = &vulkanSet->mWriteDescSet;
-        if( hazardousTexIdx < set->mTextures.size() &&
-            mCurrentRenderPassDescriptor->hasAttachment( set->mTextures[hazardousTexIdx] ) )
-        {
-            vulkanSet->setHazardousTex( *set, hazardousTexIdx,
-                                        static_cast<VulkanTextureGpuManager *>( mTextureGpuManager ) );
-            writeDescSet = &vulkanSet->mWriteDescSetHazardous;
-        }
-
-        if( mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::Textures] != writeDescSet )
-        {
-            mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::TexBuffers] = 0;
-            mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::Textures] = writeDescSet;
-            mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::UavBuffers] = 0;
-            mGlobalTable.dirtyBakedTextures = true;
-            mTableDirty = true;
-        }
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_setTextures( uint32 slotStart, const DescriptorSetTexture2 *set )
-    {
-#if OGRE_DEBUG_MODE >= OGRE_DEBUG_HIGH
-        {
-            FastArray<DescriptorSetTexture2::Slot>::const_iterator itor = set->mTextures.begin();
-            FastArray<DescriptorSetTexture2::Slot>::const_iterator endt = set->mTextures.end();
-
-            while( itor != endt )
-            {
-                if( itor->isTexture() )
-                    checkTextureLayout( itor->getTexture().texture, mCurrentRenderPassDescriptor );
-                ++itor;
-            }
-        }
-#endif
-        VulkanDescriptorSetTexture2 *vulkanSet =
-            reinterpret_cast<VulkanDescriptorSetTexture2 *>( set->mRsData );
-
-        if( mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::ReadOnlyBuffers] !=
-            &vulkanSet->mWriteDescSets[0] )
-        {
-            mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::ReadOnlyBuffers] =
-                &vulkanSet->mWriteDescSets[0];
-            mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::TexBuffers] =
-                &vulkanSet->mWriteDescSets[1];
-            mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::Textures] =
-                &vulkanSet->mWriteDescSets[2];
-            mGlobalTable.dirtyBakedTextures = true;
-            mTableDirty = true;
-        }
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_setSamplers( uint32 slotStart, const DescriptorSetSampler *set )
-    {
-        VulkanDescriptorSetSampler *vulkanSet =
-            reinterpret_cast<VulkanDescriptorSetSampler *>( set->mRsData );
-
-        if( mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::Samplers] !=
-            &vulkanSet->mWriteDescSet )
-        {
-            mGlobalTable.bakedDescriptorSets[BakedDescriptorSets::Samplers] = &vulkanSet->mWriteDescSet;
-            mGlobalTable.dirtyBakedSamplers = true;
-            mTableDirty = true;
-        }
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_setTexturesCS( uint32 slotStart, const DescriptorSetTexture *set )
-    {
-        VulkanDescriptorSetTexture *vulkanSet =
-            reinterpret_cast<VulkanDescriptorSetTexture *>( set->mRsData );
-
-        if( mComputeTable.bakedDescriptorSets[BakedDescriptorSets::Textures] !=
-            &vulkanSet->mWriteDescSet )
-        {
-            mComputeTable.bakedDescriptorSets[BakedDescriptorSets::ReadOnlyBuffers] = 0;
-            mComputeTable.bakedDescriptorSets[BakedDescriptorSets::TexBuffers] = 0;
-            mComputeTable.bakedDescriptorSets[BakedDescriptorSets::Textures] = &vulkanSet->mWriteDescSet;
-            mComputeTable.dirtyBakedSamplers = true;
-            mComputeTableDirty = true;
-        }
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_setTexturesCS( uint32 slotStart, const DescriptorSetTexture2 *set )
-    {
-        VulkanDescriptorSetTexture2 *vulkanSet =
-            reinterpret_cast<VulkanDescriptorSetTexture2 *>( set->mRsData );
-
-        if( mComputeTable.bakedDescriptorSets[BakedDescriptorSets::ReadOnlyBuffers] !=
-            &vulkanSet->mWriteDescSets[0] )
-        {
-            mComputeTable.bakedDescriptorSets[BakedDescriptorSets::ReadOnlyBuffers] =
-                &vulkanSet->mWriteDescSets[0];
-            mComputeTable.bakedDescriptorSets[BakedDescriptorSets::TexBuffers] =
-                &vulkanSet->mWriteDescSets[1];
-            mComputeTable.bakedDescriptorSets[BakedDescriptorSets::Textures] =
-                &vulkanSet->mWriteDescSets[2];
-            mComputeTable.dirtyBakedSamplers = true;
-            mComputeTableDirty = true;
-        }
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_setSamplersCS( uint32 slotStart, const DescriptorSetSampler *set )
-    {
-        VulkanDescriptorSetSampler *vulkanSet =
-            reinterpret_cast<VulkanDescriptorSetSampler *>( set->mRsData );
-
-        if( mComputeTable.bakedDescriptorSets[BakedDescriptorSets::Samplers] !=
-            &vulkanSet->mWriteDescSet )
-        {
-            mComputeTable.bakedDescriptorSets[BakedDescriptorSets::Samplers] = &vulkanSet->mWriteDescSet;
-            mComputeTable.dirtyBakedSamplers = true;
-            mComputeTableDirty = true;
-        }
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_setUavCS( uint32 slotStart, const DescriptorSetUav *set )
-    {
-        VulkanDescriptorSetUav *vulkanSet = reinterpret_cast<VulkanDescriptorSetUav *>( set->mRsData );
-
-        if( mComputeTable.bakedDescriptorSets[BakedDescriptorSets::UavBuffers] !=
-            &vulkanSet->mWriteDescSets[0] )
-        {
-            mComputeTable.bakedDescriptorSets[BakedDescriptorSets::UavBuffers] =
-                &vulkanSet->mWriteDescSets[0];
-            mComputeTable.bakedDescriptorSets[BakedDescriptorSets::UavTextures] =
-                &vulkanSet->mWriteDescSets[1];
-            mComputeTable.dirtyBakedUavs = true;
-            mComputeTableDirty = true;
-        }
     }
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::_setTextureCoordCalculation( size_t unit, TexCoordCalcMethod m,
@@ -1412,30 +1154,6 @@ namespace Ogre
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::_setTextureMatrix( size_t unit, const Matrix4 &xform ) {}
     //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_setIndirectBuffer( IndirectBufferPacked *indirectBuffer )
-    {
-        if( mVaoManager->supportsIndirectBuffers() )
-        {
-            if( indirectBuffer )
-            {
-                VulkanBufferInterface *bufferInterface =
-                    static_cast<VulkanBufferInterface *>( indirectBuffer->getBufferInterface() );
-                mIndirectBuffer = bufferInterface->getVboName();
-            }
-            else
-            {
-                mIndirectBuffer = 0;
-            }
-        }
-        else
-        {
-            if( indirectBuffer )
-                mSwIndirectBufferPtr = indirectBuffer->getSwBufferPtr();
-            else
-                mSwIndirectBufferPtr = 0;
-        }
-    }
-    //-------------------------------------------------------------------------
     RenderPassDescriptor *VulkanRenderSystem::createRenderPassDescriptor( void )
     {
         VulkanRenderPassDescriptor *retVal =
@@ -1444,46 +1162,7 @@ namespace Ogre
         return retVal;
     }
     //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_hlmsComputePipelineStateObjectCreated( HlmsComputePso *newPso )
-    {
-        VkComputePipelineCreateInfo computeInfo;
-        makeVkStruct( computeInfo, VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO );
-
-        VulkanProgram *computeShader =
-            static_cast<VulkanProgram *>( newPso->computeShader->_getBindingDelegate() );
-        computeShader->fillPipelineShaderStageCi( computeInfo.stage );
-
-        VulkanRootLayout *rootLayout = computeShader->getRootLayout();
-        computeInfo.layout = rootLayout->createVulkanHandles();
-
-        VkPipeline vulkanPso = 0u;
-        VkResult result = vkCreateComputePipelines( mActiveDevice->mDevice, VK_NULL_HANDLE, 1u,
-                                                    &computeInfo, 0, &vulkanPso );
-        checkVkResult( result, "vkCreateComputePipelines" );
-
-        VulkanHlmsPso *pso = new VulkanHlmsPso( vulkanPso, rootLayout );
-        newPso->rsData = pso;
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_hlmsComputePipelineStateObjectDestroyed( HlmsComputePso *pso )
-    {
-        if( pso == mComputePso )
-        {
-            mComputePso = 0;
-            mComputeTable.setAllDirty();
-            mComputeTableDirty = true;
-        }
-
-        OGRE_ASSERT_LOW( pso->rsData );
-        VulkanHlmsPso *vulkanPso = static_cast<VulkanHlmsPso *>( pso->rsData );
-        delayed_vkDestroyPipeline( mVaoManager, mActiveDevice->mDevice, vulkanPso->pso, 0 );
-        delete vulkanPso;
-        pso->rsData = 0;
-    }
-    //-------------------------------------------------------------------------
     void VulkanRenderSystem::_beginFrame( void ) {}
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_endFrame( void ) {}
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::_notifyActiveEncoderEnded( bool callEndRenderPassDesc )
     {
@@ -1495,25 +1174,22 @@ namespace Ogre
         if( callEndRenderPassDesc )
             endRenderPassDescriptor( true );
 
-        mUavRenderingDirty = true;
         mGlobalTable.setAllDirty();
         mTableDirty = true;
-        mPso = 0;
     }
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::_notifyActiveComputeEnded( void )
     {
-        mComputePso = 0;
         mComputeTable.setAllDirty();
         mComputeTableDirty = true;
     }
     //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_endFrameOnce( void )
+    void VulkanRenderSystem::_endFrame( void )
     {
-        RenderSystem::_endFrameOnce();
         endRenderPassDescriptor( false );
         mActiveDevice->commitAndNextCommandBuffer( SubmissionType::EndFrameAndSwap );
     }
+#if 0
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::_setHlmsSamplerblock( uint8 texUnit, const HlmsSamplerblock *samplerblock )
     {
@@ -1540,6 +1216,7 @@ namespace Ogre
             }
         }
     }
+
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::_setPipelineStateObject( const HlmsPso *pso )
     {
@@ -1570,49 +1247,6 @@ namespace Ogre
                 mTableDirty = true;
             }
         }
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_setComputePso( const HlmsComputePso *pso )
-    {
-        mActiveDevice->mGraphicsQueue.getComputeEncoder();
-
-        if( mComputePso != pso )
-        {
-            VulkanRootLayout *oldRootLayout = 0;
-            if( mComputePso )
-                oldRootLayout = reinterpret_cast<VulkanHlmsPso *>( mComputePso->rsData )->rootLayout;
-
-            VulkanHlmsPso *vulkanPso = 0;
-
-            if( pso )
-            {
-                OGRE_ASSERT_LOW( pso->rsData );
-                vulkanPso = reinterpret_cast<VulkanHlmsPso *>( pso->rsData );
-                VkCommandBuffer cmdBuffer = mActiveDevice->mGraphicsQueue.mCurrentCmdBuffer;
-                vkCmdBindPipeline( cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, vulkanPso->pso );
-
-                if( vulkanPso->rootLayout != oldRootLayout )
-                {
-                    mComputeTable.setAllDirty();
-                    mComputeTableDirty = true;
-                }
-            }
-
-            mComputePso = pso;
-        }
-    }
-    //-------------------------------------------------------------------------
-    VertexElementType VulkanRenderSystem::getColourVertexElementType( void ) const
-    {
-        return VET_COLOUR_ARGB;
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_dispatch( const HlmsComputePso &pso )
-    {
-        flushRootLayoutCS();
-
-        vkCmdDispatch( mActiveDevice->mGraphicsQueue.mCurrentCmdBuffer, pso.mNumThreadGroups[0],
-                       pso.mNumThreadGroups[1], pso.mNumThreadGroups[2] );
     }
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::_setVertexArrayObject( const VertexArrayObject *vao )
@@ -1653,167 +1287,20 @@ namespace Ogre
                                   static_cast<VkIndexType>( indexBuffer->getIndexType() ) );
         }
     }
+#endif
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::flushRootLayout( void )
     {
         if( !mTableDirty )
             return;
 
-        VulkanVaoManager *vaoManager = static_cast<VulkanVaoManager *>( mVaoManager );
-        VulkanRootLayout *rootLayout = reinterpret_cast<VulkanHlmsPso *>( mPso->rsData )->rootLayout;
-        rootLayout->bind( mDevice, vaoManager, mGlobalTable );
+        //VulkanRootLayout *rootLayout = reinterpret_cast<VulkanHlmsPso *>( mPso->rsData )->rootLayout;
+        //rootLayout->bind( mDevice, vaoManager, mGlobalTable );
         mGlobalTable.reset();
         mTableDirty = false;
     }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::flushRootLayoutCS( void )
-    {
-        if( !mComputeTableDirty )
-            return;
 
-        VulkanVaoManager *vaoManager = static_cast<VulkanVaoManager *>( mVaoManager );
-        VulkanRootLayout *rootLayout =
-            reinterpret_cast<VulkanHlmsPso *>( mComputePso->rsData )->rootLayout;
-        rootLayout->bind( mDevice, vaoManager, mComputeTable );
-        mComputeTable.reset();
-        mComputeTableDirty = false;
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_render( const CbDrawCallIndexed *cmd )
-    {
-        flushRootLayout();
-
-        VkCommandBuffer cmdBuffer = mActiveDevice->mGraphicsQueue.mCurrentCmdBuffer;
-        vkCmdDrawIndexedIndirect( cmdBuffer, mIndirectBuffer,
-                                  reinterpret_cast<VkDeviceSize>( cmd->indirectBufferOffset ),
-                                  cmd->numDraws, sizeof( CbDrawIndexed ) );
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_render( const CbDrawCallStrip *cmd )
-    {
-        flushRootLayout();
-
-        VkCommandBuffer cmdBuffer = mActiveDevice->mGraphicsQueue.mCurrentCmdBuffer;
-        vkCmdDrawIndirect( cmdBuffer, mIndirectBuffer,
-                           reinterpret_cast<VkDeviceSize>( cmd->indirectBufferOffset ), cmd->numDraws,
-                           sizeof( CbDrawStrip ) );
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_renderEmulated( const CbDrawCallIndexed *cmd )
-    {
-        flushRootLayout();
-
-        CbDrawIndexed *drawCmd = reinterpret_cast<CbDrawIndexed *>( mSwIndirectBufferPtr +
-                                                                    (size_t)cmd->indirectBufferOffset );
-
-        VkCommandBuffer cmdBuffer = mActiveDevice->mGraphicsQueue.mCurrentCmdBuffer;
-
-        for( uint32 i = cmd->numDraws; i--; )
-        {
-            vkCmdDrawIndexed( cmdBuffer, drawCmd->primCount, drawCmd->instanceCount,
-                              drawCmd->firstVertexIndex, static_cast<int32>( drawCmd->baseVertex ),
-                              drawCmd->baseInstance );
-            ++drawCmd;
-        }
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_renderEmulated( const CbDrawCallStrip *cmd )
-    {
-        flushRootLayout();
-
-        CbDrawStrip *drawCmd =
-            reinterpret_cast<CbDrawStrip *>( mSwIndirectBufferPtr + (size_t)cmd->indirectBufferOffset );
-
-        VkCommandBuffer cmdBuffer = mActiveDevice->mGraphicsQueue.mCurrentCmdBuffer;
-
-        for( uint32 i = cmd->numDraws; i--; )
-        {
-            vkCmdDraw( cmdBuffer, drawCmd->primCount, drawCmd->instanceCount, drawCmd->firstVertexIndex,
-                       drawCmd->baseInstance );
-            ++drawCmd;
-        }
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_setRenderOperation( const v1::CbRenderOp *cmd )
-    {
-        VulkanVaoManager *vaoManager = static_cast<VulkanVaoManager *>( mVaoManager );
-
-        VkCommandBuffer cmdBuffer = mActiveDevice->mGraphicsQueue.mCurrentCmdBuffer;
-
-        VkBuffer vulkanVertexBuffers[16];
-        VkDeviceSize offsets[16];
-        memset( vulkanVertexBuffers, 0, sizeof( vulkanVertexBuffers ) );
-        memset( offsets, 0, sizeof( offsets ) );
-
-        size_t maxUsedSlot = 0;
-        const v1::VertexBufferBinding::VertexBufferBindingMap &binds =
-            cmd->vertexData->vertexBufferBinding->getBindings();
-        v1::VertexBufferBinding::VertexBufferBindingMap::const_iterator itor = binds.begin();
-        v1::VertexBufferBinding::VertexBufferBindingMap::const_iterator end = binds.end();
-
-        while( itor != end )
-        {
-            v1::VulkanHardwareVertexBuffer *vulkanBuffer =
-                reinterpret_cast<v1::VulkanHardwareVertexBuffer *>( itor->second.get() );
-
-            const size_t slot = itor->first;
-
-            OGRE_ASSERT_LOW( slot < 15u );
-
-            size_t offsetStart;
-            vulkanVertexBuffers[slot] = vulkanBuffer->getBufferName( offsetStart );
-            offsets[slot] = offsetStart;
-#if OGRE_PLATFORM == OGRE_PLATFORM_APPLE_IOS
-            offsets[slot] += cmd->vertexData->vertexStart * vulkanBuffer->getVertexSize();
-#endif
-            ++itor;
-            maxUsedSlot = std::max( maxUsedSlot, slot + 1u );
-        }
-
-        VulkanBufferInterface *bufIntf =
-            static_cast<VulkanBufferInterface *>( vaoManager->getDrawId()->getBufferInterface() );
-        vulkanVertexBuffers[maxUsedSlot] = bufIntf->getVboName();
-        offsets[maxUsedSlot] = 0;
-
-        vkCmdBindVertexBuffers( cmdBuffer, 0u, (uint32)maxUsedSlot + 1u, vulkanVertexBuffers, offsets );
-
-        if( cmd->indexData )
-        {
-            size_t offsetStart = 0u;
-
-            v1::VulkanHardwareIndexBuffer *vulkanBuffer =
-                static_cast<v1::VulkanHardwareIndexBuffer *>( cmd->indexData->indexBuffer.get() );
-            VkIndexType indexType = static_cast<VkIndexType>( vulkanBuffer->getType() );
-            VkBuffer indexBuffer = vulkanBuffer->getBufferName( offsetStart );
-
-            vkCmdBindIndexBuffer( cmdBuffer, indexBuffer, offsetStart, indexType );
-        }
-
-        mCurrentIndexBuffer = cmd->indexData;
-        mCurrentVertexBuffer = cmd->vertexData;
-        mCurrentPrimType = std::min( VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
-                                     static_cast<VkPrimitiveTopology>( cmd->operationType - 1u ) );
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_render( const v1::CbDrawCallIndexed *cmd )
-    {
-        flushRootLayout();
-
-        VkCommandBuffer cmdBuffer = mActiveDevice->mGraphicsQueue.mCurrentCmdBuffer;
-        vkCmdDrawIndexed( cmdBuffer, cmd->primCount, cmd->instanceCount, cmd->firstVertexIndex,
-                          (int32_t)mCurrentVertexBuffer->vertexStart, cmd->baseInstance );
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_render( const v1::CbDrawCallStrip *cmd )
-    {
-        flushRootLayout();
-
-        VkCommandBuffer cmdBuffer = mActiveDevice->mGraphicsQueue.mCurrentCmdBuffer;
-        vkCmdDraw( cmdBuffer, cmd->primCount, cmd->instanceCount, cmd->firstVertexIndex,
-                   cmd->baseInstance );
-    }
-
-    void VulkanRenderSystem::_render( const v1::RenderOperation &op )
+    void VulkanRenderSystem::_render( const RenderOperation &op )
     {
         flushRootLayout();
 
@@ -1821,7 +1308,7 @@ namespace Ogre
         RenderSystem::_render( op );
 
         const size_t numberOfInstances = op.numberOfInstances;
-        const bool hasInstanceData = mCurrentVertexBuffer->vertexBufferBinding->getHasInstanceData();
+        const bool hasInstanceData = mCurrentVertexBuffer->vertexBufferBinding->hasInstanceData();
 
         VkCommandBuffer cmdBuffer = mActiveDevice->mGraphicsQueue.mCurrentCmdBuffer;
 
@@ -1833,7 +1320,7 @@ namespace Ogre
                 // Update derived depth bias.
                 if( mDerivedDepthBias && mCurrentPassIterationNum > 0 )
                 {
-                    const float biasSign = mReverseDepth ? 1.0f : -1.0f;
+                    const float biasSign = mIsReverseDepthBufferEnabled ? 1.0f : -1.0f;
                     vkCmdSetDepthBias( cmdBuffer,
                                        ( mDerivedDepthBiasBase +
                                          mDerivedDepthBiasMultiplier * mCurrentPassIterationNum ) *
@@ -1853,7 +1340,7 @@ namespace Ogre
                 // Update derived depth bias.
                 if( mDerivedDepthBias && mCurrentPassIterationNum > 0 )
                 {
-                    const float biasSign = mReverseDepth ? 1.0f : -1.0f;
+                    const float biasSign = mIsReverseDepthBufferEnabled ? 1.0f : -1.0f;
                     vkCmdSetDepthBias( cmdBuffer,
                                        ( mDerivedDepthBiasBase +
                                          mDerivedDepthBiasMultiplier * mCurrentPassIterationNum ) *
@@ -1874,9 +1361,10 @@ namespace Ogre
     }
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::bindGpuProgramParameters( GpuProgramType gptype,
-                                                       GpuProgramParametersSharedPtr params,
+                                                       const GpuProgramParametersPtr& params,
                                                        uint16 variabilityMask )
     {
+#if 0
         VulkanProgram *shader = 0;
         switch( gptype )
         {
@@ -1953,6 +1441,7 @@ namespace Ogre
             mCurrentAutoParamsBufferSpaceLeft -=
                 std::min( mCurrentAutoParamsBufferSpaceLeft, bytesToWrite );
         }
+#endif
     }
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::bindGpuProgramPassIterationParameters( GpuProgramType gptype ) {}
@@ -1982,11 +1471,6 @@ namespace Ogre
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::unregisterThread() {}
     //-------------------------------------------------------------------------
-    const PixelFormatToShaderType *VulkanRenderSystem::getPixelFormatToShaderType( void ) const
-    {
-        return &mPixelFormatToShaderType;
-    }
-    //-------------------------------------------------------------------------
     void VulkanRenderSystem::flushCommands( void ) {}
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::beginProfileEvent( const String &eventName ) {}
@@ -2006,10 +1490,9 @@ namespace Ogre
     void VulkanRenderSystem::setClipPlanesImpl( const PlaneList &clipPlanes ) {}
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::initialiseFromRenderSystemCapabilities( RenderSystemCapabilities *caps,
-                                                                     Window *primary )
+                                                                     RenderTarget *primary )
     {
-        mShaderManager = OGRE_NEW VulkanGpuProgramManager( mActiveDevice );
-        mVulkanProgramFactory0 = OGRE_NEW VulkanProgramFactory( mActiveDevice, "glslvk", true );
+        /*mVulkanProgramFactory0 = OGRE_NEW VulkanProgramFactory( mActiveDevice, "glslvk", true );
         mVulkanProgramFactory1 = OGRE_NEW VulkanProgramFactory( mActiveDevice, "glsl", false );
         mVulkanProgramFactory2 = OGRE_NEW VulkanProgramFactory( mActiveDevice, "hlslvk", false );
         mVulkanProgramFactory3 = OGRE_NEW VulkanProgramFactory( mActiveDevice, "hlsl", false );
@@ -2017,17 +1500,9 @@ namespace Ogre
         HighLevelGpuProgramManager::getSingleton().addFactory( mVulkanProgramFactory0 );
         // HighLevelGpuProgramManager::getSingleton().addFactory( mVulkanProgramFactory1 );
         HighLevelGpuProgramManager::getSingleton().addFactory( mVulkanProgramFactory2 );
-        // HighLevelGpuProgramManager::getSingleton().addFactory( mVulkanProgramFactory3 );
+        // HighLevelGpuProgramManager::getSingleton().addFactory( mVulkanProgramFactory3 );*/
 
-        mCache = OGRE_NEW VulkanCache( mActiveDevice );
-
-        Log *defaultLog = LogManager::getSingleton().getDefaultLog();
-        if( defaultLog )
-        {
-            caps->log( defaultLog );
-            defaultLog->logMessage( " * Using Reverse Z: " +
-                                    StringConverter::toString( mReverseDepth, true ) );
-        }
+        //mCache = OGRE_NEW VulkanCache( mActiveDevice );
     }
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::beginRenderPassDescriptor( RenderPassDescriptor *desc,
@@ -2036,8 +1511,8 @@ namespace Ogre
                                                         const Vector4 *scissors, uint32 numViewports,
                                                         bool overlaysEnabled, bool warnIfRtvWasFlushed )
     {
-        if( desc->mInformationOnly && desc->hasSameAttachments( mCurrentRenderPassDescriptor ) )
-            return;
+        //if( desc->mInformationOnly && desc->hasSameAttachments( mCurrentRenderPassDescriptor ) )
+        //    return;
 
         const bool mDebugSubmissionValidationLayers = false;
         if( mDebugSubmissionValidationLayers )
@@ -2048,10 +1523,10 @@ namespace Ogre
             mActiveDevice->commitAndNextCommandBuffer( SubmissionType::FlushOnly );
         }
 
-        const int oldWidth = mCurrentRenderViewport[0].getActualWidth();
-        const int oldHeight = mCurrentRenderViewport[0].getActualHeight();
-        const int oldX = mCurrentRenderViewport[0].getActualLeft();
-        const int oldY = mCurrentRenderViewport[0].getActualTop();
+        const int oldWidth = mActiveViewport[0].getActualWidth();
+        const int oldHeight = mActiveViewport[0].getActualHeight();
+        const int oldX = mActiveViewport[0].getActualLeft();
+        const int oldY = mActiveViewport[0].getActualTop();
 #if OGRE_NO_VIEWPORT_ORIENTATIONMODE == 0
         const OrientationMode oldOrientationMode =
             mCurrentRenderViewport[0].getCurrentTarget()
@@ -2062,14 +1537,11 @@ namespace Ogre
         VulkanRenderPassDescriptor *currPassDesc =
             static_cast<VulkanRenderPassDescriptor *>( mCurrentRenderPassDescriptor );
 
-        RenderSystem::beginRenderPassDescriptor( desc, anyTarget, mipLevel, viewportSizes, scissors,
-                                                 numViewports, overlaysEnabled, warnIfRtvWasFlushed );
-
         // Calculate the new "lower-left" corner of the viewport to compare with the old one
-        const int w = mCurrentRenderViewport[0].getActualWidth();
-        const int h = mCurrentRenderViewport[0].getActualHeight();
-        const int x = mCurrentRenderViewport[0].getActualLeft();
-        const int y = mCurrentRenderViewport[0].getActualTop();
+        const int w = mActiveViewport[0].getActualWidth();
+        const int h = mActiveViewport[0].getActualHeight();
+        const int x = mActiveViewport[0].getActualLeft();
+        const int y = mActiveViewport[0].getActualTop();
 #if OGRE_NO_VIEWPORT_ORIENTATIONMODE == 0
         const OrientationMode orientationMode =
             mCurrentRenderViewport[0].getCurrentTarget()->getOrientationMode();
@@ -2130,6 +1602,9 @@ namespace Ogre
         const bool wasGraphicsOpen =
             mActiveDevice->mGraphicsQueue.getEncoderState() != VulkanQueue::EncoderGraphicsOpen;
 
+        mEntriesToFlush = 1;
+
+
         if( mEntriesToFlush )
         {
             mActiveDevice->mGraphicsQueue.endAllEncoders( false );
@@ -2145,8 +1620,8 @@ namespace Ogre
         {
             mActiveDevice->mGraphicsQueue.getGraphicsEncoder();
 
-            VulkanVaoManager *vaoManager = static_cast<VulkanVaoManager *>( mVaoManager );
-            vaoManager->bindDrawIdVertexBuffer( mActiveDevice->mGraphicsQueue.mCurrentCmdBuffer );
+            //VulkanVaoManager *vaoManager = static_cast<VulkanVaoManager *>( mVaoManager );
+            //vaoManager->bindDrawIdVertexBuffer( mActiveDevice->mGraphicsQueue.mCurrentCmdBuffer );
 
             if( mStencilEnabled )
             {
@@ -2158,9 +1633,9 @@ namespace Ogre
             mInterruptedRenderCommandEncoder = false;
         }
 
-        flushUAVs();
+        //flushUAVs();
 
-        const uint32 numViewports = mMaxBoundViewports;
+        const uint32 numViewports = 1;
 
         // If we flushed, viewport and scissor settings got reset.
         if( mVpChanged || numViewports > 1u )
@@ -2168,10 +1643,10 @@ namespace Ogre
             VkViewport vkVp[16];
             for( size_t i = 0; i < numViewports; ++i )
             {
-                vkVp[i].x = mCurrentRenderViewport[i].getActualLeft();
-                vkVp[i].y = mCurrentRenderViewport[i].getActualTop();
-                vkVp[i].width = mCurrentRenderViewport[i].getActualWidth();
-                vkVp[i].height = mCurrentRenderViewport[i].getActualHeight();
+                vkVp[i].x = mActiveViewport[i].getActualLeft();
+                vkVp[i].y = mActiveViewport[i].getActualTop();
+                vkVp[i].width = mActiveViewport[i].getActualWidth();
+                vkVp[i].height = mActiveViewport[i].getActualHeight();
                 vkVp[i].minDepth = 0;
                 vkVp[i].maxDepth = 1;
 
@@ -2187,17 +1662,18 @@ namespace Ogre
             vkCmdSetViewport( mActiveDevice->mGraphicsQueue.mCurrentCmdBuffer, 0u, numViewports, vkVp );
         }
 
+#if 0
         if( mVpChanged || numViewports > 1u )
         {
             VkRect2D scissorRect[16];
             for( size_t i = 0; i < numViewports; ++i )
             {
-                scissorRect[i].offset.x = mCurrentRenderViewport[i].getScissorActualLeft();
-                scissorRect[i].offset.y = mCurrentRenderViewport[i].getScissorActualTop();
+                scissorRect[i].offset.x = mActiveViewport[i].getScissorActualLeft();
+                scissorRect[i].offset.y = mActiveViewport[i].getScissorActualTop();
                 scissorRect[i].extent.width =
-                    static_cast<uint32>( mCurrentRenderViewport[i].getScissorActualWidth() );
+                    static_cast<uint32>( mActiveViewport[i].getScissorActualWidth() );
                 scissorRect[i].extent.height =
-                    static_cast<uint32>( mCurrentRenderViewport[i].getScissorActualHeight() );
+                    static_cast<uint32>( mActiveViewport[i].getScissorActualHeight() );
 #if OGRE_NO_VIEWPORT_ORIENTATIONMODE == 0
                 if( mCurrentRenderViewport[i].getCurrentTarget()->getOrientationMode() & 0x01 )
                 {
@@ -2210,10 +1686,12 @@ namespace Ogre
             vkCmdSetScissor( mActiveDevice->mGraphicsQueue.mCurrentCmdBuffer, 0u, numViewports,
                              scissorRect );
         }
+#endif
 
         mEntriesToFlush = 0;
         mVpChanged = false;
         mInterruptedRenderCommandEncoder = false;
+
     }
     //-------------------------------------------------------------------------
     inline void VulkanRenderSystem::endRenderPassDescriptor( bool isInterruptingRender )
@@ -2230,7 +1708,7 @@ namespace Ogre
             mInterruptedRenderCommandEncoder = isInterruptingRender;
 
             if( !isInterruptingRender )
-                RenderSystem::endRenderPassDescriptor();
+                ;//RenderSystem::endRenderPassDescriptor();
             else
                 mEntriesToFlush = RenderPassDescriptor::All;
         }
@@ -2238,17 +1716,12 @@ namespace Ogre
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::endRenderPassDescriptor( void ) { endRenderPassDescriptor( false ); }
     //-------------------------------------------------------------------------
-    TextureGpu *VulkanRenderSystem::createDepthBufferFor( TextureGpu *colourTexture,
-                                                          bool preferDepthTexture,
-                                                          PixelFormatGpu depthBufferFormat,
-                                                          uint16 poolId )
-    {
-        if( depthBufferFormat == PFG_UNKNOWN )
-            depthBufferFormat = DepthBuffer::DefaultDepthBufferFormat;
 
-        return RenderSystem::createDepthBufferFor( colourTexture, preferDepthTexture, depthBufferFormat,
-                                                   poolId );
+    DepthBuffer *VulkanRenderSystem::_createDepthBufferFor( RenderTarget* )
+    {
+        return NULL;
     }
+
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::notifySwapchainCreated( VulkanWindow *window )
     {
@@ -2279,13 +1752,14 @@ namespace Ogre
             ++itor;
         }
     }
+#if 0
     //-------------------------------------------------------------------------
     VkRenderPass VulkanRenderSystem::getVkRenderPass( HlmsPassPso passPso, uint8 &outMrtCount )
     {
         uint8 mrtCount = 0;
         for( int i = 0; i < OGRE_MAX_MULTIPLE_RENDER_TARGETS; ++i )
         {
-            if( passPso.colourFormat[i] != PFG_NULL )
+            if( passPso.colourFormat[i] != PF_UNKNOWN )
                 mrtCount = static_cast<uint8>( i ) + 1u;
         }
         outMrtCount = mrtCount;
@@ -2310,7 +1784,7 @@ namespace Ogre
             resolveAttachRefs[numColourAttachments].attachment = VK_ATTACHMENT_UNUSED;
             resolveAttachRefs[numColourAttachments].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-            if( passPso.colourFormat[i] != PFG_NULL )
+            if( passPso.colourFormat[i] != PF_UNKNOWN )
             {
                 colourAttachRefs[numColourAttachments].attachment = attachmentIdx;
                 colourAttachRefs[numColourAttachments].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -2322,7 +1796,7 @@ namespace Ogre
                 attachments[attachmentIdx].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
                 ++attachmentIdx;
 
-                if( passPso.resolveColourFormat[i] != PFG_NULL )
+                if( passPso.resolveColourFormat[i] != PF_UNKNOWN )
                 {
                     usesResolveAttachments = true;
 
@@ -2341,7 +1815,7 @@ namespace Ogre
             }
         }
 
-        if( passPso.depthFormat != PFG_NULL )
+        if( passPso.depthFormat != PF_UNKNOWN )
         {
             attachments[attachmentIdx].format = VulkanMappings::get( passPso.depthFormat );
             attachments[attachmentIdx].samples =
@@ -2373,6 +1847,7 @@ namespace Ogre
         VkRenderPass retVal = mCache->getRenderPass( renderPassCreateInfo );
         return retVal;
     }
+#endif
     //-------------------------------------------------------------------------
     static VkPipelineStageFlags toVkPipelineStageFlags( ResourceLayout::Layout layout,
                                                         const bool bIsDepth )
@@ -2415,6 +1890,7 @@ namespace Ogre
     static VkPipelineStageFlags ogreToVkStageFlags( uint8 ogreStageMask )
     {
         VkPipelineStageFlags retVal = 0u;
+#if 0
         if( ogreStageMask & ( 1u << VertexShader ) )
             retVal |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
         if( ogreStageMask & ( 1u << PixelShader ) )
@@ -2427,7 +1903,7 @@ namespace Ogre
             retVal |= VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT;
         if( ogreStageMask & ( 1u << GPT_COMPUTE_PROGRAM ) )
             retVal |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-
+#endif
         return retVal;
     }
     //-------------------------------------------------------------------------
@@ -2435,6 +1911,7 @@ namespace Ogre
     {
         mActiveDevice->mGraphicsQueue.endCopyEncoder();
     }
+#if 0
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::executeResourceTransition( const ResourceTransitionArray &rstCollection )
     {
@@ -2467,7 +1944,7 @@ namespace Ogre
                 imageBarrier.oldLayout = VulkanMappings::get( itor->oldLayout, texture );
                 imageBarrier.newLayout = VulkanMappings::get( itor->newLayout, texture );
 
-                const bool bIsDepth = PixelFormatGpuUtils::isDepth( texture->getPixelFormat() );
+                const bool bIsDepth = PixelUtil::isDepth( texture->getFormat() );
 
                 // If oldAccess == ResourceAccess::Undefined then this texture is used for
                 // the first time on a new frame (but not necessarily the first time ever)
@@ -2846,7 +2323,7 @@ namespace Ogre
         pipeline.pDynamicState = &dynamicStateCi;
         pipeline.renderPass = renderPass;
 
-#if OGRE_DEBUG_MODE >= OGRE_DEBUG_HIGH
+#if OGRE_DEBUG_MODE
         mValidationError = false;
 #endif
 
@@ -2855,7 +2332,7 @@ namespace Ogre
                                                      &pipeline, 0, &vulkanPso );
         checkVkResult( result, "vkCreateGraphicsPipelines" );
 
-#if OGRE_DEBUG_MODE >= OGRE_DEBUG_MEDIUM
+#if OGRE_DEBUG_MODE
         if( mValidationError )
         {
             LogManager::getSingleton().logMessage( "Validation error:" );
@@ -2880,6 +2357,7 @@ namespace Ogre
         VulkanHlmsPso *pso = new VulkanHlmsPso( vulkanPso, rootLayout );
         newPso->rsData = pso;
     }
+
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::_hlmsPipelineStateObjectDestroyed( HlmsPso *pso )
     {
@@ -2897,28 +2375,6 @@ namespace Ogre
         delete vulkanPso;
         pso->rsData = 0;
     }
-
-    void VulkanRenderSystem::_hlmsMacroblockCreated( HlmsMacroblock *newBlock )
-    {
-        Log *defaultLog = LogManager::getSingleton().getDefaultLog();
-        if( defaultLog )
-        {
-            defaultLog->logMessage( String( " _hlmsMacroblockCreated " ) );
-        }
-    }
-
-    void VulkanRenderSystem::_hlmsMacroblockDestroyed( HlmsMacroblock *block ) {}
-
-    void VulkanRenderSystem::_hlmsBlendblockCreated( HlmsBlendblock *newBlock )
-    {
-        Log *defaultLog = LogManager::getSingleton().getDefaultLog();
-        if( defaultLog )
-        {
-            defaultLog->logMessage( String( " _hlmsBlendblockCreated " ) );
-        }
-    }
-
-    void VulkanRenderSystem::_hlmsBlendblockDestroyed( HlmsBlendblock *block ) {}
 
     void VulkanRenderSystem::_hlmsSamplerblockCreated( HlmsSamplerblock *newBlock )
     {
@@ -2961,43 +2417,13 @@ namespace Ogre
 
         newBlock->mRsData = textureSampler;
     }
+
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::_hlmsSamplerblockDestroyed( HlmsSamplerblock *block )
     {
         assert( block->mRsData );
         VkSampler textureSampler = static_cast<VkSampler>( block->mRsData );
         delayed_vkDestroySampler( mVaoManager, mActiveDevice->mDevice, textureSampler, 0 );
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_descriptorSetTextureCreated( DescriptorSetTexture *newSet )
-    {
-        VulkanDescriptorSetTexture *vulkanSet = new VulkanDescriptorSetTexture( *newSet );
-        newSet->mRsData = vulkanSet;
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_descriptorSetTextureDestroyed( DescriptorSetTexture *set )
-    {
-        OGRE_ASSERT_LOW( set->mRsData );
-        VulkanDescriptorSetTexture *vulkanSet =
-            static_cast<VulkanDescriptorSetTexture *>( set->mRsData );
-        delete vulkanSet;
-        set->mRsData = 0;
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_descriptorSetTexture2Created( DescriptorSetTexture2 *newSet )
-    {
-        VulkanDescriptorSetTexture2 *vulkanSet = new VulkanDescriptorSetTexture2( *newSet );
-        newSet->mRsData = vulkanSet;
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_descriptorSetTexture2Destroyed( DescriptorSetTexture2 *set )
-    {
-        OGRE_ASSERT_LOW( set->mRsData );
-        VulkanDescriptorSetTexture2 *vulkanSet =
-            static_cast<VulkanDescriptorSetTexture2 *>( set->mRsData );
-        vulkanSet->destroy( mVaoManager, mActiveDevice->mDevice, *set );
-        delete vulkanSet;
-        set->mRsData = 0;
     }
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::_descriptorSetSamplerCreated( DescriptorSetSampler *newSet )
@@ -3014,29 +2440,11 @@ namespace Ogre
         delete vulkanSet;
         set->mRsData = 0;
     }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_descriptorSetUavCreated( DescriptorSetUav *newSet )
-    {
-        VulkanDescriptorSetUav *vulkanSet = new VulkanDescriptorSetUav( *newSet );
-        newSet->mRsData = vulkanSet;
-    }
-    //-------------------------------------------------------------------------
-    void VulkanRenderSystem::_descriptorSetUavDestroyed( DescriptorSetUav *set )
-    {
-        OGRE_ASSERT_LOW( set->mRsData );
-
-        VulkanDescriptorSetUav *vulkanSet = reinterpret_cast<VulkanDescriptorSetUav *>( set->mRsData );
-        vulkanSet->destroy( *set );
-        delete vulkanSet;
-
-        set->mRsData = 0;
-    }
+#endif
     //-------------------------------------------------------------------------
     void VulkanRenderSystem::setStencilBufferParams( uint32 refValue,
-                                                     const StencilParams &stencilParams )
+                                                     const StencilState &stencilParams )
     {
-        RenderSystem::setStencilBufferParams( refValue, stencilParams );
-
         // There are two main cases:
         // 1. The active render encoder is valid and will be subsequently used for drawing.
         //      We need to set the stencil reference value on this encoder. We do this below.
@@ -3059,18 +2467,57 @@ namespace Ogre
         }
     }
     //-------------------------------------------------------------------------
-    SampleDescription VulkanRenderSystem::validateSampleDescription( const SampleDescription &sampleDesc,
-                                                                     PixelFormatGpu format )
-    {
-        SampleDescription retVal(
-            getMaxUsableSampleCount( mDevice->mDeviceProperties, sampleDesc.getMaxSamples() ),
-            sampleDesc.getMsaaPattern() );
-        return retVal;
-    }
-    //-------------------------------------------------------------------------
     bool VulkanRenderSystem::isSameLayout( ResourceLayout::Layout a, ResourceLayout::Layout b,
                                            const TextureGpu *texture, bool bIsDebugCheck ) const
     {
         return VulkanMappings::get( a, texture ) == VulkanMappings::get( b, texture );
+    }
+
+    void VulkanRenderSystem::_setViewport(Viewport *vp)
+    {
+        if (!vp)
+        {
+            mActiveViewport = NULL;
+            _setRenderTarget(NULL);
+        }
+        else if (vp != mActiveViewport || vp->_isUpdated())
+        {
+            auto target = vp->getTarget();
+            _setRenderTarget(target);
+            mActiveViewport = vp;
+
+            // Calculate the "lower-left" corner of the viewport
+            Rect vpRect = vp->getActualDimensions();
+            if (!target->requiresTextureFlipping())
+            {
+                // Convert "upper-left" corner to "lower-left"
+                std::swap(vpRect.top, vpRect.bottom);
+                vpRect.top = target->getHeight() - vpRect.top;
+                vpRect.bottom = target->getHeight() - vpRect.bottom;
+            }
+
+            // TODO: forward data
+
+            vp->_clearUpdatedFlag();
+        }
+    }
+    void VulkanRenderSystem::_setRenderTarget(RenderTarget *target)
+    {
+        mActiveRenderTarget = target;
+
+        if (!target)
+            return;
+
+        if(auto win = dynamic_cast<VulkanWindow*>(target))
+        {
+            mCurrentRenderPassDescriptor->mColour[0].texture = static_cast<VulkanTextureGpu*>(win->getTexture());
+        }
+    }
+    void VulkanRenderSystem::clearFrameBuffer(unsigned int buffers, const ColourValue& colour, Real depth,
+                                              unsigned short stencil)
+    {
+        mCurrentRenderPassDescriptor->mColour[0].clearColour = colour;
+        mCurrentRenderPassDescriptor->setClearColour(0, colour);
+        clearFrameBuffer(mCurrentRenderPassDescriptor, mCurrentRenderPassDescriptor->mColour[0].texture, 0);
     }
 }  // namespace Ogre

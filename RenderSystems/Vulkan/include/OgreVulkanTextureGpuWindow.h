@@ -41,22 +41,21 @@ namespace Ogre
 
         uint32 mCurrentSwapchainIdx;
 
-        virtual void createInternalResourcesImpl( void );
-        virtual void destroyInternalResourcesImpl( void );
+        virtual void createInternalResourcesImpl( void ) override;
+        virtual void freeInternalResourcesImpl( void ) override;
 
     public:
-        VulkanTextureGpuWindow( GpuPageOutStrategy::GpuPageOutStrategy pageOutStrategy,
-                                VaoManager *vaoManager, IdString name, uint32 textureFlags,
-                                TextureTypes::TextureTypes initialType,
-                                TextureGpuManager *textureManager, VulkanWindow *window );
+        VulkanTextureGpuWindow( GpuPageOutStrategy pageOutStrategy,
+                                VaoManager *vaoManager, String name, uint32 textureFlags,
+                                TextureType initialType,
+                                VulkanTextureGpuManager *textureManager, VulkanWindow *window );
         virtual ~VulkanTextureGpuWindow();
 
-        virtual void setTextureType( TextureTypes::TextureTypes textureType );
+        virtual void setTextureType( TextureType textureType );
 
         virtual void getSubsampleLocations( vector<Vector2>::type locations );
 
-        virtual void notifyDataIsReady( void );
-        virtual bool _isDataReadyImpl( void ) const;
+        bool isRenderWindowSpecific() const { return true; }
 
         /// @copydoc VulkanWindow::getImageAcquiredSemaphore
         VkSemaphore getImageAcquiredSemaphore( void );
@@ -69,9 +68,7 @@ namespace Ogre
 
         virtual void swapBuffers( void );
 
-        virtual void getCustomAttribute( IdString name, void *pData );
-
-        virtual bool isOpenGLRenderWindow( void ) const;
+        virtual void getCustomAttribute( String name, void *pData );
 
         virtual void _setToDisplayDummyTexture( void );
         virtual void _notifyTextureSlotChanged( const TexturePool *newPool, uint16 slice );

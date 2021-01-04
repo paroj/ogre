@@ -33,10 +33,9 @@ THE SOFTWARE.
 #include "OgreVulkanRenderSystem.h"
 #include "OgreVulkanTextureGpu.h"
 #include "OgreVulkanWindow.h"
-#include "Vao/OgreVulkanVaoManager.h"
 
 #include "OgreException.h"
-#include "OgrePixelFormatGpuUtils.h"
+#include "OgrePixelFormat.h"
 #include "OgreStringConverter.h"
 
 #include "OgreVulkanUtils.h"
@@ -219,10 +218,10 @@ namespace Ogre
     {
         mDevice = device;
         mQueue = queue;
-        mVaoManager = static_cast<VulkanVaoManager *>( renderSystem->getVaoManager() );
+        //mVaoManager = static_cast<VulkanVaoManager *>( renderSystem->getVaoManager() );
         mRenderSystem = renderSystem;
 
-        const size_t maxNumFrames = mVaoManager->getDynamicBufferMultiplier();
+        const size_t maxNumFrames = 1;//mVaoManager->getDynamicBufferMultiplier();
 
         VkDeviceQueueCreateInfo queueCreateInfo;
         makeVkStruct( queueCreateInfo, VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO );
@@ -256,7 +255,7 @@ namespace Ogre
     //-------------------------------------------------------------------------
     void VulkanQueue::newCommandBuffer( void )
     {
-        const size_t currFrame = mVaoManager->waitForTailFrameToFinish();
+        const size_t currFrame = 0;//mVaoManager->waitForTailFrameToFinish();
         mCurrentCmdBuffer = getCmdBuffer( currFrame );
 
         VkCommandBufferBeginInfo beginInfo;
@@ -428,7 +427,7 @@ namespace Ogre
             BufferPackedDownloadMap::iterator it = mCopyDownloadBuffers.find( buffer );
 
             if( it == mCopyDownloadBuffers.end() )
-                bufferAccessFlags = VulkanMappings::get( buffer->getBufferPackedType() );
+                ;//bufferAccessFlags = VulkanMappings::get( buffer->getBufferPackedType() );
             else
             {
                 if( !it->second )
@@ -467,7 +466,7 @@ namespace Ogre
                     vkTexture->mCurrLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL )
                 {
                     OGRE_EXCEPT( Exception::ERR_INVALID_STATE,
-                                 "Texture " + vkTexture->getNameStr() +
+                                 "Texture " + vkTexture->getName() +
                                      " is already in CopySrc or CopyDst layout, externally set. Perhaps "
                                      "you need to call RenderSystem::flushTextureCopyOperations",
                                  "VulkanQueue::prepareForUpload" );
@@ -569,7 +568,7 @@ namespace Ogre
         }
     }
     //-------------------------------------------------------------------------
-    void VulkanQueue::prepareForDownload( const BufferPacked *buffer, TextureGpu *texture )
+    void VulkanQueue::prepareForDownload( const BufferPacked *buffer, VulkanTextureGpu *texture )
     {
         VkAccessFlags bufferAccessFlags = 0;
         VkPipelineStageFlags srcStage = 0;
@@ -581,7 +580,7 @@ namespace Ogre
 
             if( it == mCopyDownloadBuffers.end() )
             {
-                if( buffer->getBufferPackedType() == BP_TYPE_UAV )
+                if( /*buffer->getBufferPackedType()*/ 0 == BP_TYPE_UAV )
                 {
                     bufferAccessFlags = VK_ACCESS_SHADER_WRITE_BIT;
                     srcStage |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
@@ -628,7 +627,7 @@ namespace Ogre
                     vkTexture->mCurrLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL )
                 {
                     OGRE_EXCEPT( Exception::ERR_INVALID_STATE,
-                                 "Texture " + vkTexture->getNameStr() +
+                                 "Texture " + vkTexture->getName() +
                                      " is already in CopySrc or CopyDst layout, externally set. Perhaps "
                                      "you need to call RenderSystem::flushTextureCopyOperations",
                                  "VulkanQueue::prepareForDownload" );
@@ -648,7 +647,7 @@ namespace Ogre
                 if( texture->isRenderToTexture() )
                 {
                     texAccessFlags |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-                    if( !PixelFormatGpuUtils::isDepth( texture->getPixelFormat() ) )
+                    if( !PixelUtil::isDepth( texture->getFormat() ) )
                     {
                         texAccessFlags |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
                         srcStage |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -736,7 +735,7 @@ namespace Ogre
         }
     }
     //-------------------------------------------------------------------------
-    void VulkanQueue::getCopyEncoder( const BufferPacked *buffer, TextureGpu *texture,
+    void VulkanQueue::getCopyEncoder( const BufferPacked *buffer, VulkanTextureGpu *texture,
                                       const bool bDownload )
     {
         if( mEncoderState != EncoderCopyOpen )
@@ -833,7 +832,7 @@ namespace Ogre
                 // doing is copying from read-only textures (rare)
                 dstStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
-#if OGRE_DEBUG_MODE >= OGRE_DEBUG_MEDIUM
+#if OGRE_DEBUG_MODE
                 FastArray<TextureGpu *>::const_iterator itor = mImageMemBarrierPtrs.begin();
                 FastArray<TextureGpu *>::const_iterator endt = mImageMemBarrierPtrs.end();
 
@@ -852,7 +851,7 @@ namespace Ogre
             vkCmdPipelineBarrier( mCurrentCmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
                                   dstStage & mOwnerDevice->mSupportedStages, 0, numMemBarriers,
                                   &memBarrier, 0u, 0, static_cast<uint32_t>( mImageMemBarriers.size() ),
-                                  mImageMemBarriers.begin() );
+                                  mImageMemBarriers.data() );
 
             mImageMemBarriers.clear();
             mImageMemBarrierPtrs.clear();
@@ -1034,8 +1033,8 @@ namespace Ogre
             // only happen start the swapchain is done presenting
             submitInfo.waitSemaphoreCount =
                 static_cast<uint32>( mGpuWaitSemaphForCurrCmdBuff.size() );
-            submitInfo.pWaitSemaphores = mGpuWaitSemaphForCurrCmdBuff.begin();
-            submitInfo.pWaitDstStageMask = mGpuWaitFlags.begin();
+            submitInfo.pWaitSemaphores = mGpuWaitSemaphForCurrCmdBuff.data();
+            submitInfo.pWaitDstStageMask = mGpuWaitFlags.data();
         }
 
         const size_t windowsSemaphStart = mGpuSignalSemaphForCurrCmdBuff.size();
@@ -1048,8 +1047,8 @@ namespace Ogre
                 // Get some semaphores so that presentation can wait for this job to finish rendering
                 // (one for each window that will be swapped)
                 numWindowsPendingSwap = mWindowsPendingSwap.size();
-                mVaoManager->getAvailableSempaphores( mGpuSignalSemaphForCurrCmdBuff,
-                                                      numWindowsPendingSwap );
+                //mVaoManager->getAvailableSempaphores( mGpuSignalSemaphForCurrCmdBuff,
+                //                                      numWindowsPendingSwap );
             }
 
             if( !mGpuSignalSemaphForCurrCmdBuff.empty() )
@@ -1060,7 +1059,7 @@ namespace Ogre
                 // and not just with EndFrameAndSwap)
                 submitInfo.signalSemaphoreCount =
                     static_cast<uint32>( mGpuSignalSemaphForCurrCmdBuff.size() );
-                submitInfo.pSignalSemaphores = mGpuSignalSemaphForCurrCmdBuff.begin();
+                submitInfo.pSignalSemaphores = mGpuSignalSemaphForCurrCmdBuff.data();
             }
         }
 
@@ -1068,7 +1067,8 @@ namespace Ogre
         {
             // Ensure mCurrentFence is not nullptr.
             // We *must* have a fence if we're advancing the frameIdx
-            getCurrentFence();
+            
+            // TODO: getCurrentFence();
         }
 
         // clang-format off
@@ -1076,7 +1076,7 @@ namespace Ogre
         submitInfo.pCommandBuffers      = &mPendingCmds[0];
         // clang-format on
 
-        const uint8 dynBufferFrame = mVaoManager->waitForTailFrameToFinish();
+        const uint8 dynBufferFrame = 0;//mVaoManager->waitForTailFrameToFinish();
         VkFence fence = mCurrentFence;  // Note: mCurrentFence may be nullptr
 
         vkQueueSubmit( mQueue, 1u, &submitInfo, fence );
@@ -1100,16 +1100,16 @@ namespace Ogre
         {
             for( size_t windowIdx = 0u; windowIdx < numWindowsPendingSwap; ++windowIdx )
             {
-                VkSemaphore semaphore = mGpuSignalSemaphForCurrCmdBuff[windowsSemaphStart + windowIdx];
+                VkSemaphore semaphore = NULL;//mGpuSignalSemaphForCurrCmdBuff[windowsSemaphStart + windowIdx];
                 mWindowsPendingSwap[windowIdx]->_swapBuffers( semaphore );
-                mVaoManager->notifyWaitSemaphoreSubmitted( semaphore );
+                //mVaoManager->notifyWaitSemaphoreSubmitted( semaphore );
             }
         }
 
         if( submissionType >= SubmissionType::NewFrameIdx )
         {
             mPerFrameData[dynBufferFrame].mCurrentCmdIdx = 0u;
-            mVaoManager->_notifyNewCommandBuffer();
+            //mVaoManager->_notifyNewCommandBuffer();
         }
 
         newCommandBuffer();
@@ -1117,8 +1117,8 @@ namespace Ogre
         if( submissionType >= SubmissionType::EndFrameAndSwap )
         {
             // acquireNextSwapchain must be called after newCommandBuffer()
-            for( size_t windowIdx = 0u; windowIdx < numWindowsPendingSwap; ++windowIdx )
-                mWindowsPendingSwap[windowIdx]->acquireNextSwapchain();
+            //for( size_t windowIdx = 0u; windowIdx < numWindowsPendingSwap; ++windowIdx )
+            //    mWindowsPendingSwap[windowIdx]->acquireNextSwapchain();
             mWindowsPendingSwap.clear();
 
             mGpuSignalSemaphForCurrCmdBuff.clear();

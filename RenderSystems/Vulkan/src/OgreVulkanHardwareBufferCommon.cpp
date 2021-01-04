@@ -32,9 +32,7 @@ Copyright (c) 2000-2014 Torus Knot Software Ltd
 #include "OgreVulkanDevice.h"
 #include "OgreVulkanDiscardBufferManager.h"
 #include "OgreVulkanUtils.h"
-#include "Vao/OgreVulkanDynamicBuffer.h"
-#include "Vao/OgreVulkanStagingBuffer.h"
-#include "Vao/OgreVulkanVaoManager.h"
+#include "OgreVulkanStagingBuffer.h"
 
 namespace Ogre
 {
@@ -43,6 +41,7 @@ namespace v1
     VulkanHardwareBufferCommon::VulkanHardwareBufferCommon(
         size_t sizeBytes, HardwareBuffer::Usage usage, uint16 alignment,
         VulkanDiscardBufferManager *discardBufferManager, VulkanDevice *device ) :
+        HardwareBuffer(usage, false, false),
         mDevice( device ),
         mDiscardBuffer( 0 ),
         mVaoManager( discardBufferManager->getVaoManager() ),
@@ -51,9 +50,12 @@ namespace v1
         memset( &mBuffer, 0, sizeof( mBuffer ) );
         mBuffer.mSize = sizeBytes;
 
-        mLastFrameUsed = mVaoManager->getFrameCount() - mVaoManager->getDynamicBufferMultiplier();
+        mSizeInBytes = sizeBytes;
+
+        mLastFrameUsed = 0;//mVaoManager->getFrameCount() - mVaoManager->getDynamicBufferMultiplier();
         mLastFrameGpuWrote = mLastFrameUsed;
 
+#if 0
         VulkanVaoManager *vaoManager = static_cast<VulkanVaoManager *>( mVaoManager );
         VulkanVaoManager::VboFlag vboFlag;
 
@@ -66,6 +68,7 @@ namespace v1
             mBuffer = vaoManager->allocateRawBuffer( vboFlag, sizeBytes );
         else
             mDiscardBuffer = discardBufferManager->createDiscardBuffer( sizeBytes, alignment );
+#endif
     }
 
     VulkanHardwareBufferCommon::~VulkanHardwareBufferCommon()
@@ -78,20 +81,20 @@ namespace v1
         }
         else
         {
-            VulkanVaoManager *vaoManager = static_cast<VulkanVaoManager *>( mVaoManager );
-            vaoManager->deallocateRawBuffer( mBuffer );
+            //VulkanVaoManager *vaoManager = static_cast<VulkanVaoManager *>( mVaoManager );
+            //vaoManager->deallocateRawBuffer( mBuffer );
         }
     }
 
     void VulkanHardwareBufferCommon::_notifyDeviceStalled()
     {
-        mLastFrameUsed = mVaoManager->getFrameCount() - mVaoManager->getDynamicBufferMultiplier();
+        mLastFrameUsed = 0;//mVaoManager->getFrameCount() - mVaoManager->getDynamicBufferMultiplier();
         mLastFrameGpuWrote = mLastFrameUsed;
     }
 
     VkBuffer VulkanHardwareBufferCommon::getBufferName( size_t &outOffset )
     {
-        mLastFrameUsed = mVaoManager->getFrameCount();
+        mLastFrameUsed = 0;//mVaoManager->getFrameCount();
         if( !mDiscardBuffer )
         {
             outOffset = mBuffer.mInternalBufferStart;
@@ -104,7 +107,7 @@ namespace v1
     VkBuffer VulkanHardwareBufferCommon::getBufferNameForGpuWrite( size_t &outOffset )
     {
         assert( !mDiscardBuffer && "Discardable buffers can't be written from GPU!" );
-        mLastFrameUsed = mVaoManager->getFrameCount();
+        mLastFrameUsed = 0;//mVaoManager->getFrameCount();
         mLastFrameGpuWrote = mLastFrameUsed;
         outOffset = mBuffer.mInternalBufferStart;
         return mBuffer.mVboName;
@@ -122,8 +125,8 @@ namespace v1
 
         void *retPtr = 0;
 
-        const uint32 currentFrame = mVaoManager->getFrameCount();
-        const uint32 bufferMultiplier = mVaoManager->getDynamicBufferMultiplier();
+        const uint32 currentFrame       = 0;//mVaoManager->getFrameCount();
+        const uint32 bufferMultiplier   = 1;//mVaoManager->getDynamicBufferMultiplier();
 
         if( mDiscardBuffer )
         {
@@ -153,7 +156,7 @@ namespace v1
         }
         else
         {
-            if( mBuffer.mVboFlag != VulkanVaoManager::CPU_INACCESSIBLE )
+            if( mBuffer.mVboFlag != HBU_GPU_ONLY )
             {
                 if( options == HardwareBuffer::HBL_READ_ONLY )
                 {
@@ -187,8 +190,8 @@ namespace v1
 
                 OGRE_ASSERT_LOW( !mStagingBuffer && "Invalid state, and mStagingBuffer will leak" );
 
-                mStagingBuffer = mVaoManager->getStagingBuffer( length, true );
-                retPtr = mStagingBuffer->map( length );
+                //mStagingBuffer = mVaoManager->getStagingBuffer( length, true );
+                //retPtr = mStagingBuffer->map( length );
             }
         }
 
@@ -204,7 +207,7 @@ namespace v1
         else if( mStagingBuffer )
         {
             static_cast<VulkanStagingBuffer *>( mStagingBuffer )->_unmapToV1( this, lockStart, lockSize );
-            mStagingBuffer->removeReferenceCount();
+            //mStagingBuffer->removeReferenceCount();
             mStagingBuffer = 0;
         }
         else
@@ -220,8 +223,8 @@ namespace v1
         void const *srcData = 0;
         StagingBuffer *stagingBuffer = 0;
 
-        const uint32 currentFrame = mVaoManager->getFrameCount();
-        const uint32 bufferMultiplier = mVaoManager->getDynamicBufferMultiplier();
+        const uint32 currentFrame = 0;//mVaoManager->getFrameCount();
+        const uint32 bufferMultiplier = 1;//mVaoManager->getDynamicBufferMultiplier();
 
         if( mDiscardBuffer )
         {
@@ -230,7 +233,7 @@ namespace v1
         }
         else
         {
-            if( mBuffer.mVboFlag != VulkanVaoManager::CPU_INACCESSIBLE )
+            if( mBuffer.mVboFlag != HBU_GPU_ONLY )
             {
                 if( currentFrame - mLastFrameGpuWrote < bufferMultiplier )
                     mDevice->stall();
@@ -239,7 +242,7 @@ namespace v1
             else
             {
                 // Reading from HBL_WRITE_ONLY.
-                stagingBuffer = mVaoManager->getStagingBuffer( length, false );
+                //stagingBuffer = mVaoManager->getStagingBuffer( length, false );
                 size_t stagingBufferOffset = static_cast<VulkanStagingBuffer *>( stagingBuffer )
                                                  ->_asyncDownloadV1( this, offset, length );
                 mDevice->stall();
@@ -252,15 +255,15 @@ namespace v1
 
         memcpy( pDest, srcData, length );
 
-        if( stagingBuffer )
-            stagingBuffer->removeReferenceCount();
+        //if( stagingBuffer )
+        //    stagingBuffer->removeReferenceCount();
     }
 
     void VulkanHardwareBufferCommon::writeData( size_t offset, size_t length, const void *pSource,
         bool discardWholeBuffer )
     {
         if( ( discardWholeBuffer && mDiscardBuffer ) ||
-            mBuffer.mVboFlag == VulkanVaoManager::CPU_INACCESSIBLE )
+            mBuffer.mVboFlag == HBU_GPU_ONLY )
         {
             // Fast path is through locking (it either discards or already uses a StagingBuffer).
             void *dstData = this->lockImpl( offset, length, HardwareBuffer::HBL_DISCARD, false );
@@ -270,18 +273,18 @@ namespace v1
         else
         {
             // Use a StagingBuffer to avoid blocking
-            StagingBuffer *stagingBuffer = mVaoManager->getStagingBuffer( length, true );
+            StagingBuffer *stagingBuffer = 0;//mVaoManager->getStagingBuffer( length, true );
             void *dstData = stagingBuffer->map( length );
             memcpy( dstData, pSource, length );
             static_cast<VulkanStagingBuffer *>( stagingBuffer )->_unmapToV1( this, offset, length );
-            stagingBuffer->removeReferenceCount();
+            //stagingBuffer->removeReferenceCount();
         }
     }
 
     void VulkanHardwareBufferCommon::copyData( VulkanHardwareBufferCommon *srcBuffer, size_t srcOffset,
                                                size_t dstOffset, size_t length, bool discardWholeBuffer )
     {
-        if( !this->mDiscardBuffer || mBuffer.mVboFlag == VulkanVaoManager::CPU_INACCESSIBLE )
+        if( !this->mDiscardBuffer || mBuffer.mVboFlag == HBU_GPU_ONLY )
         {
             mDevice->mGraphicsQueue.getCopyEncoderV1Buffer( false );
 

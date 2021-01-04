@@ -52,16 +52,11 @@ namespace Ogre
             return;
         }
 
-        char tmpBuffer[VK_MAX_PHYSICAL_DEVICE_NAME_SIZE + 32];
-        LwString logStr( LwString::FromEmptyPointer( tmpBuffer, sizeof( tmpBuffer ) ) );
-
-        logStr.clear();
-        logStr.a( "[Vulkan] Found ", numDevices, " devices" );
-        LogManager::getSingleton().logMessage( logStr.c_str() );
+        LogManager::getSingleton().stream() << "[Vulkan] Found " << numDevices << " devices";
 
         FastArray<VkPhysicalDevice> pd;
         pd.resize( numDevices );
-        result = vkEnumeratePhysicalDevices( instance, &numDevices, pd.begin() );
+        result = vkEnumeratePhysicalDevices( instance, &numDevices, pd.data() );
         checkVkResult( result, "vkEnumeratePhysicalDevices" );
 
         LogManager::getSingleton().logMessage( "[Vulkan] Found devices:" );
@@ -72,11 +67,10 @@ namespace Ogre
             VkPhysicalDeviceProperties deviceProps;
             vkGetPhysicalDeviceProperties( pd[i], &deviceProps );
 
-            logStr.clear();
-            logStr.a( deviceProps.deviceName, " #", i );
-            mDevices.push_back( logStr.c_str() );
+            auto devName = StringUtil::format("%s #%d", deviceProps.deviceName, i);
+            mDevices.push_back( devName );
 
-            LogManager::getSingleton().logMessage( logStr.c_str() );
+            LogManager::getSingleton().logMessage( devName );
         }
     }
     //-------------------------------------------------------------------------
@@ -107,24 +101,68 @@ namespace Ogre
         optDevices.immutable = false;
 
         mOptions[optDevices.name] = optDevices;
-    }
-    //-------------------------------------------------------------------------
-    void VulkanSupport::setConfigOption( const String &name, const String &value )
-    {
-        ConfigOptionMap::iterator it = mOptions.find( name );
 
-        if( it == mOptions.end() )
-        {
-            OGRE_EXCEPT( Exception::ERR_INVALIDPARAMS, "Option named " + name + " does not exist.",
-                         "VulkanSupport::setConfigOption" );
-        }
-        else
-        {
-            it->second.currentValue = value;
-        }
+
+        ConfigOption optVideoMode;
+        ConfigOption optDisplayFrequency;
+        ConfigOption optVSyncInterval;
+        ConfigOption optVSyncMethod;
+        ConfigOption optFSAA;
+
+        // Video mode possibilities
+        optVideoMode.name = "Video Mode";
+        optVideoMode.immutable = false;
+
+        optVideoMode.possibleValues.push_back("1280 x 720");
+        optVideoMode.possibleValues.push_back("640 x 480");
+        if( !optVideoMode.possibleValues.empty() )
+            optVideoMode.currentValue = optVideoMode.possibleValues.front();
+
+        optDisplayFrequency.name = "Display Frequency";
+        optDisplayFrequency.immutable = false;
+        optDisplayFrequency.currentValue.clear();
+
+        optVSyncInterval.name = "VSync Interval";
+        optVSyncInterval.immutable = false;
+        optVSyncInterval.possibleValues.push_back( "1" );
+        optVSyncInterval.possibleValues.push_back( "2" );
+        optVSyncInterval.possibleValues.push_back( "3" );
+        optVSyncInterval.possibleValues.push_back( "4" );
+        optVSyncInterval.currentValue = "1";
+
+        optVSyncMethod.name = "VSync Method";
+        optVSyncMethod.immutable = false;
+        optVSyncMethod.possibleValues.push_back( "Render Ahead / FIFO" );
+        optVSyncMethod.possibleValues.push_back( "Lowest Latency" );
+        optVSyncMethod.currentValue = optVSyncMethod.possibleValues.front();
+
+        optFSAA.name = "FSAA";
+        optFSAA.immutable = false;
+        optFSAA.possibleValues.push_back( "1" );
+        optFSAA.possibleValues.push_back( "2" );
+        optFSAA.possibleValues.push_back( "4" );
+        optFSAA.possibleValues.push_back( "8" );
+        optFSAA.possibleValues.push_back( "16" );
+        //        for( vector<int>::type::iterator it = mFSAALevels.begin(); it != mFSAALevels.end();
+        //        ++it )
+        //        {
+        //            String val = StringConverter::toString( *it );
+        //            optFSAA.possibleValues.push_back( val );
+        //            /* not implementing CSAA in GL for now
+        //            if (*it >= 8)
+        //                optFSAA.possibleValues.push_back(val + " [Quality]");
+        //            */
+        //        }
+        optFSAA.currentValue = "1";
+
+        mOptions[optVideoMode.name] = optVideoMode;
+        mOptions[optDisplayFrequency.name] = optDisplayFrequency;
+        mOptions[optVSyncInterval.name] = optVSyncInterval;
+        mOptions[optVSyncMethod.name] = optVSyncMethod;
+        mOptions[optFSAA.name] = optFSAA;
     }
     //-------------------------------------------------------------------------
-    String VulkanSupport::validateConfigOptions( void )
+    String VulkanSupport::validateConfigOptions( VulkanRenderSystem *renderSystem )
     {
         ConfigOptionMap::iterator it;
 
@@ -134,7 +172,7 @@ namespace Ogre
             const String deviceName = it->second.currentValue;
             if( std::find( mDevices.begin(), mDevices.end(), deviceName ) == mDevices.end() )
             {
-                setConfigOption( "Device", mDevices.front() );
+                renderSystem->setConfigOption( "Device", mDevices.front() );
                 return "Requested rendering device could not be found, default will be used instead.";
             }
         }

@@ -31,10 +31,9 @@ THE SOFTWARE.
 
 #include "OgreVulkanPrerequisites.h"
 
-#include "Vao/OgreStagingBuffer.h"
-
 namespace Ogre
 {
+    struct Destination;
     /** A staging buffer is a buffer that resides on the GPU and be written to/from both CPU & GPU
         However the access in both cases is limited. GPUs can only copy (i.e. memcpy) to another
         real buffer (can't be used directly as i.e. texture or vertex buffer) and CPUs can only
@@ -42,8 +41,26 @@ namespace Ogre
         In other words, a staging buffer is an intermediate buffer to transfer data between
         CPU & GPU
     */
-    class _OgreVulkanExport VulkanStagingBuffer : public StagingBuffer
+    class _OgreVulkanExport VulkanStagingBuffer
     {
+        struct Fence
+        {
+            size_t  start;
+            size_t  end;
+
+            Fence( size_t _start, size_t _end ) :
+                start( _start ), end( _end )
+            {
+                assert( _start <= _end );
+            }
+
+            bool overlaps( const Fence &fence ) const
+            {
+                return !( fence.end <= this->start || fence.start >= this->end );
+            }
+
+            size_t length(void) const { return end - start; }
+        };
     protected:
         void *mMappedPtr;
 
@@ -117,6 +134,14 @@ namespace Ogre
         size_t _asyncDownloadV1( v1::VulkanHardwareBufferCommon *source, size_t srcOffset,
                                  size_t srcLength );
         void _notifyDeviceStalled();
+        const void* _mapForRead( size_t offset, size_t sizeBytes );
+
+        /** Maps the given amount of bytes. May block if not ready.
+            @see uploadWillStall if you wish to know.
+        @remarks
+            Will throw if sizeBytes > this->getMaxSize()
+        */
+        void* map( size_t sizeBytes );
     };
 }  // namespace Ogre
 

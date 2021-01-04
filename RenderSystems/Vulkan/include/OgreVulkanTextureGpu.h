@@ -29,11 +29,10 @@ THE SOFTWARE.
 #ifndef _OgreVulkanTextureGpu_H_
 #define _OgreVulkanTextureGpu_H_
 
-#include "OgreDescriptorSetTexture.h"
-#include "OgreDescriptorSetUav.h"
 #include "OgreVulkanPrerequisites.h"
 
-#include "OgreTextureGpu.h"
+#include "OgreTexture.h"
+#include "OgreFrustum.h"
 
 #include "vulkan/vulkan_core.h"
 
@@ -48,7 +47,11 @@ namespace Ogre
      *  @{
      */
 
-    class _OgreVulkanExport VulkanTextureGpu : public TextureGpu
+    struct TexturePool;
+    typedef int GpuPageOutStrategy;
+
+
+    class _OgreVulkanExport VulkanTextureGpu : public Texture
     {
     protected:
         /// The general case is that the whole D3D11 texture will be accessed through the SRV.
@@ -88,6 +91,7 @@ namespace Ogre
         size_t mVboPoolIdx;
         size_t mInternalBufferStart;
 
+        bool mTexturePool = false;
     public:
         /// The current layout we're in. Including any internal stuff.
         VkImageLayout mCurrLayout;
@@ -100,26 +104,36 @@ namespace Ogre
         VkImageLayout mNextLayout;
 
     protected:
-        virtual void createInternalResourcesImpl( void );
-        virtual void destroyInternalResourcesImpl( void );
+        void createInternalResourcesImpl( void ) override;
+        void freeInternalResourcesImpl( void ) override;
 
         virtual void createMsaaSurface( void );
         virtual void destroyMsaaSurface( void );
 
     public:
-        VulkanTextureGpu( GpuPageOutStrategy::GpuPageOutStrategy pageOutStrategy, VaoManager *vaoManager,
-                          IdString name, uint32 textureFlags, TextureTypes::TextureTypes initialType,
-                          TextureGpuManager *textureManager );
+        bool isReinterpretable() const { return false; }
+        bool hasMsaaExplicitResolves() const { return false; }
+        bool isTexture() const { return true; }
+        bool isRenderToTexture() const { return mUsage & TU_RENDERTARGET; }
+        bool isUav() const { return false; }
+        bool isPoolOwner() const { return false; }
+        bool hasAutomaticBatching() const { return false; }
+        bool isMultisample() const { return mFSAA; }
+        bool allowsAutoMipmaps() const { return mUsage & TU_AUTOMIPMAP; }
+        bool isRenderWindowSpecific() const { return false; }
+
+        VulkanTextureGpu(TextureManager* textureManager, const String& name, ResourceHandle handle,
+                         const String& group);
         virtual ~VulkanTextureGpu();
 
         PixelFormatGpu getWorkaroundedPixelFormat( const PixelFormatGpu pixelFormat ) const;
 
-        virtual void setTextureType( TextureTypes::TextureTypes textureType );
+        virtual void setTextureType( TextureType textureType );
 
         virtual ResourceLayout::Layout getCurrentLayout( void ) const;
 
-        virtual void copyTo( TextureGpu *dst, const TextureBox &dstBox, uint8 dstMipLevel,
-                             const TextureBox &srcBox, uint8 srcMipLevel,
+        virtual void copyTo( TextureGpu *dst, const PixelBox &dstBox, uint8 dstMipLevel,
+                             const PixelBox &srcBox, uint8 srcMipLevel,
                              bool keepResolvedTexSynced = true,
                              ResourceAccess::ResourceAccess issueBarriers = ResourceAccess::ReadWrite );
 
@@ -145,15 +159,10 @@ namespace Ogre
                                  uint16 arraySlice, bool cubemapsAs2DArrays, bool forUav,
                                  uint32 numSlices = 0u, VkImage imageOverride = 0 ) const;
 
-        VkImageView createView( const DescriptorSetTexture2::TextureSlot &texSlot,
-                                bool bUseCache = true ) const;
-        VkImageView createView( DescriptorSetUav::TextureSlot texSlot, bool bUseCache = true );
         VkImageView createView( void ) const;
         VkImageView getDefaultDisplaySrv( void ) const { return mDefaultDisplaySrv; }
 
         void destroyView( VkImageView imageView );
-        void destroyView( DescriptorSetTexture2::TextureSlot texSlot, VkImageView imageView );
-        void destroyView( DescriptorSetUav::TextureSlot texSlot, VkImageView imageView );
 
         /// Returns a fresh VkImageMemoryBarrier filled with common data.
         /// srcAccessMask, dstAccessMask, oldLayout and newLayout must be filled by caller
@@ -181,10 +190,10 @@ namespace Ogre
         virtual void destroyMsaaSurface( void );
 
     public:
-        VulkanTextureGpuRenderTarget( GpuPageOutStrategy::GpuPageOutStrategy pageOutStrategy,
-                                      VaoManager *vaoManager, IdString name, uint32 textureFlags,
-                                      TextureTypes::TextureTypes initialType,
-                                      TextureGpuManager *textureManager );
+        VulkanTextureGpuRenderTarget( GpuPageOutStrategy pageOutStrategy,
+                                      VaoManager *vaoManager, String name, uint32 textureFlags,
+                                      TextureType initialType,
+                                      TextureManager *textureManager );
 
         virtual void _setDepthBufferDefaults( uint16 depthBufferPoolId, bool preferDepthTexture,
                                               PixelFormatGpu desiredDepthBufferFormat );

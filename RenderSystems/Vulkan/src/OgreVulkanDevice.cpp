@@ -30,7 +30,6 @@ THE SOFTWARE.
 
 #include "OgreVulkanRenderSystem.h"
 #include "OgreVulkanWindow.h"
-#include "Vao/OgreVulkanVaoManager.h"
 
 #include "OgreException.h"
 #include "OgreStringConverter.h"
@@ -122,14 +121,14 @@ namespace Ogre
         createInfo.pApplicationInfo = &appInfo;
 
         createInfo.enabledLayerCount = static_cast<uint32>( layers.size() );
-        createInfo.ppEnabledLayerNames = layers.begin();
+        createInfo.ppEnabledLayerNames = layers.data();
 
         extensions.push_back( VK_KHR_SURFACE_EXTENSION_NAME );
 
         createInfo.enabledExtensionCount = static_cast<uint32>( extensions.size() );
-        createInfo.ppEnabledExtensionNames = extensions.begin();
+        createInfo.ppEnabledExtensionNames = extensions.data();
 
-#if OGRE_DEBUG_MODE >= OGRE_DEBUG_HIGH
+#if 1 //OGRE_DEBUG_MODE
         VkDebugReportCallbackCreateInfoEXT debugCb = addDebugCallback( debugCallback, renderSystem );
         createInfo.pNext = &debugCb;
 #endif
@@ -173,7 +172,7 @@ namespace Ogre
 
         FastArray<VkPhysicalDevice> pd;
         pd.resize( numDevices );
-        result = vkEnumeratePhysicalDevices( mInstance, &numDevices, pd.begin() );
+        result = vkEnumeratePhysicalDevices( mInstance, &numDevices, pd.data() );
         checkVkResult( result, "vkEnumeratePhysicalDevices" );
         mPhysicalDevice = pd[deviceIdx];
 
@@ -290,7 +289,7 @@ namespace Ogre
         for( size_t i = 0u; i < queueCreateInfo.size(); ++i )
         {
             queuePriorities[i].resize( queueCreateInfo[i].queueCount, 1.0f );
-            queueCreateInfo[i].pQueuePriorities = queuePriorities[i].begin();
+            queueCreateInfo[i].pQueuePriorities = queuePriorities[i].data();
         }
 
         extensions.push_back( VK_KHR_SWAPCHAIN_EXTENSION_NAME );
@@ -299,7 +298,7 @@ namespace Ogre
         makeVkStruct( createInfo, VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO );
 
         createInfo.enabledExtensionCount = static_cast<uint32>( extensions.size() );
-        createInfo.ppEnabledExtensionNames = extensions.begin();
+        createInfo.ppEnabledExtensionNames = extensions.data();
 
         createInfo.queueCreateInfoCount = static_cast<uint32>( queueCreateInfo.size() );
         createInfo.pQueueCreateInfos = &queueCreateInfo[0];

@@ -30,17 +30,14 @@ THE SOFTWARE.
 
 #include "OgreVulkanPrerequisites.h"
 
-#include "OgreWindow.h"
+#include "OgreRenderWindow.h"
+#include "vulkan/vulkan_core.h"
 
 namespace Ogre
 {
-    class VulkanWindow : public Window
+    class VulkanWindow : public RenderWindow
     {
     public:
-        enum Backend
-        {
-            BackendX11 = 1u << 0u
-        };
         enum SwapchainStatus
         {
             /// We already called VulkanWindow::acquireNextSwapchain.
@@ -66,7 +63,14 @@ namespace Ogre
         bool mHwGamma;
         bool mClosed;
 
+        bool mVisible;
+        bool mHidden;
+
+        bool mVSync;
+        int mVSyncInterval;
+
         VulkanDevice *mDevice;
+        VulkanTextureGpu* mTexture;
 
         VkSurfaceKHR mSurfaceKHR;
         VkSwapchainKHR mSwapchain;
@@ -81,7 +85,7 @@ namespace Ogre
 
         void parseSharedParams( const NameValuePairList *miscParams );
 
-        PixelFormatGpu chooseSurfaceFormat( bool hwGamma );
+        VkFormat chooseSurfaceFormat( bool hwGamma );
         void createSwapchain( void );
         void destroySwapchain( void );
 
@@ -92,12 +96,26 @@ namespace Ogre
         VulkanWindow( const String &title, uint32 width, uint32 height, bool fullscreenMode );
         virtual ~VulkanWindow();
 
+        VulkanTextureGpu* getTexture() { return mTexture; }
+
         virtual void destroy( void );
 
+        virtual void reposition( int32 leftPt, int32 topPt ) {}
+
+        void setVisible( bool visible ) override { mVisible = visible; }
+        bool isVisible( void ) const override { return mVisible; }
+        void setHidden( bool hidden ) { mHidden = hidden; }
+        bool isHidden( void ) const { return mHidden; }
+
+        void copyContentsToMemory(const Box& src, const PixelBox &dst, FrameBuffer buffer = FB_AUTO) {}
+        bool requiresTextureFlipping() const { return false; }
+
+        void resize(unsigned int widthPt, unsigned int heightPt) {}
+
         void _setDevice( VulkanDevice *device );
-        virtual void _initialize( TextureGpuManager *textureGpuManager );
-        virtual void _initialize( TextureGpuManager *textureGpuManager,
-                                  const NameValuePairList *miscParams ) = 0;
+
+        void create(const String& name, unsigned int widthPt, unsigned int heightPt, bool fullScreen,
+                    const NameValuePairList* miscParams);
 
         /// Returns null if getImageAcquiredSemaphore has already been called during this frame
         VkSemaphore getImageAcquiredSemaphore( void );

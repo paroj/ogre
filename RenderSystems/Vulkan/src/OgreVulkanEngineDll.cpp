@@ -35,7 +35,7 @@ namespace Ogre
 {
     static VulkanPlugin *plugin;
 
-    extern "C" void _OgreVulkanExport dllStartPlugin( void ) throw()
+    extern "C" void _OgreVulkanExport dllStartPlugin( void )
     {
         plugin = OGRE_NEW VulkanPlugin();
         Root::getSingleton().installPlugin( plugin );

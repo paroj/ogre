@@ -31,12 +31,10 @@ Copyright (c) 2000-present Torus Knot Software Ltd
 
 #include "OgreVulkanPrerequisites.h"
 
-#include "Vao/OgreVulkanVaoManager.h"
-
 namespace Ogre
 {
     class VulkanDiscardBuffer;
-    typedef vector<VulkanDiscardBuffer *>::type VulkanDiscardBufferVec;
+    typedef std::vector<VulkanDiscardBuffer *> VulkanDiscardBufferVec;
 
     /// Vulkan doesn't support "DISCARD" like D3D9/D3D11 (and OpenGL but often it's broken)
     /// where we requested to map a write-only buffer and the API would discard the previous
@@ -47,12 +45,20 @@ namespace Ogre
     class _OgreVulkanExport VulkanDiscardBufferManager : public BufferAlloc
     {
     public:
-        struct UnsafeBlock : public VulkanVaoManager::Block
+        struct Block
+        {
+            size_t offset;
+            size_t size;
+
+            Block( size_t _offset, size_t _size ) : offset( _offset ), size( _size ) {}
+        };
+
+        struct UnsafeBlock : public Block
         {
             uint32 lastFrameUsed;
 
             UnsafeBlock( size_t _offset, size_t _size, uint32 _lastFrameUsed ) :
-                VulkanVaoManager::Block( _offset, _size ),
+                Block( _offset, _size ),
                 lastFrameUsed( _lastFrameUsed )
             {
             }
@@ -62,13 +68,13 @@ namespace Ogre
                 return this->lastFrameUsed < other.lastFrameUsed;
             }
         };
-        typedef vector<UnsafeBlock>::type UnsafeBlockVec;
+        typedef std::vector<UnsafeBlock> UnsafeBlockVec;
 
     private:
         VulkanRawBuffer mBuffer;
         VulkanDevice *mDevice;
         VaoManager *mVaoManager;
-        VulkanVaoManager::BlockVec mFreeBlocks;
+        std::vector<Block> mFreeBlocks;
 
         UnsafeBlockVec mUnsafeBlocks;
 

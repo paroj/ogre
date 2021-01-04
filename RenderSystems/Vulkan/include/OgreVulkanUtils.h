@@ -30,10 +30,8 @@ THE SOFTWARE.
 
 #include "OgreVulkanPrerequisites.h"
 
-#include "OgrePixelFormatGpu.h"
+#include "OgrePixelFormat.h"
 #include "OgreString.h"
-
-#include "SPIRV-Reflect/spirv_reflect.h"
 
 #include "vulkan/vulkan_core.h"
 
@@ -65,8 +63,6 @@ namespace Ogre
     {
         return ( ( offset + alignment - 1 ) / alignment ) * alignment;
     }
-
-    String getSpirvReflectError( SpvReflectResult spirvReflectResult );
 
     VkSampleCountFlagBits getMaxUsableSampleCount(
         VkPhysicalDeviceProperties &physicalDeviceProperties, uint32 requestedSampleCount );

@@ -34,10 +34,6 @@ THE SOFTWARE.
 #include "OgreVulkanTextureGpuWindow.h"
 #include "OgreVulkanWindow.h"
 
-#include "OgrePixelFormatGpuUtils.h"
-#include "Vao/OgreVulkanVaoManager.h"
-
-#include "OgreVulkanDelayedFuncs.h"
 #include "OgreVulkanMappings.h"
 #include "OgreVulkanUtils.h"
 
@@ -184,8 +180,8 @@ namespace Ogre
     VkClearColorValue VulkanRenderPassDescriptor::getClearColour( const ColourValue &clearColour,
                                                                   PixelFormatGpu pixelFormat )
     {
-        const bool isInteger = PixelFormatGpuUtils::isInteger( pixelFormat );
-        const bool isSigned = PixelFormatGpuUtils::isSigned( pixelFormat );
+        const bool isInteger = PixelUtil::isInteger( pixelFormat );
+        const bool isSigned = false;//PixelUtil::isSigned( pixelFormat );
         VkClearColorValue retVal;
         if( !isInteger )
         {
@@ -270,7 +266,7 @@ namespace Ogre
     {
         const RenderPassColourTarget &colour = mColour[idx];
 
-        if( ( !colour.texture->getSampleDescription().isMultisample() || !colour.resolveTexture ||
+        if( ( !colour.texture->getFSAA() > 0 || !colour.resolveTexture ||
               ( colour.storeAction != StoreAction::MultisampleResolve &&
                 colour.storeAction != StoreAction::StoreAndMultisampleResolve ) ) &&
             bResolveTex )
@@ -288,7 +284,7 @@ namespace Ogre
         {
             OGRE_ASSERT_HIGH( dynamic_cast<VulkanTextureGpu *>( colour.texture ) );
             texture = static_cast<VulkanTextureGpu *>( colour.texture );
-            if( colour.texture->getSampleDescription().isMultisample() )
+            if( colour.texture->getFSAA() > 0 )
             {
                 if( !colour.texture->hasMsaaExplicitResolves() )
                     texName = texture->getMsaaFramebufferName();
@@ -306,10 +302,10 @@ namespace Ogre
         }
 
         VkAttachmentDescription &attachment = attachments[currAttachmIdx];
-        attachment.format = VulkanMappings::get( texture->getPixelFormat() );
+        attachment.format = VulkanMappings::get( texture->getFormat() );
         attachment.samples = bResolveTex ? VK_SAMPLE_COUNT_1_BIT
                                          : static_cast<VkSampleCountFlagBits>(
-                                               texture->getSampleDescription().getColourSamples() );
+                                               colour.texture->getFSAA() + 1 );
         attachment.loadOp = bResolveTex ? VK_ATTACHMENT_LOAD_OP_DONT_CARE : get( colour.loadAction );
         attachment.storeOp = get( colour.storeAction, bResolveTex );
         attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -343,7 +339,7 @@ namespace Ogre
         if( !texture->isRenderWindowSpecific() || ( texture->isMultisample() && !bResolveTex ) )
         {
             fboDesc.mImageViews[currAttachmIdx] = texture->_createView(
-                texture->getPixelFormat(), mipLevel, 1u, slice, false, false, 1u, texName );
+                texture->getFormat(), mipLevel, 1u, slice, false, false, 1u, texName );
         }
         else
         {
@@ -360,7 +356,7 @@ namespace Ogre
             {
                 texName = textureVulkan->getWindowFinalTextureName( surfIdx );
                 fboDesc.mWindowImageViews[surfIdx] = texture->_createView(
-                    texture->getPixelFormat(), mipLevel, 1u, slice, false, false, 1u, texName );
+                    texture->getFormat(), mipLevel, 1u, slice, false, false, 1u, texName );
             }
         }
 
@@ -384,9 +380,8 @@ namespace Ogre
     //-----------------------------------------------------------------------------------
     VkImageView VulkanRenderPassDescriptor::setupDepthAttachment( VkAttachmentDescription &attachment )
     {
-        attachment.format = VulkanMappings::get( mDepth.texture->getPixelFormat() );
-        attachment.samples = static_cast<VkSampleCountFlagBits>(
-            mDepth.texture->getSampleDescription().getColourSamples() );
+        attachment.format = VulkanMappings::get( mDepth.texture->getFormat() );
+        attachment.samples = static_cast<VkSampleCountFlagBits>(mDepth.texture->getFSAA() + 1);
         attachment.loadOp = get( mDepth.loadAction );
         attachment.storeOp = get( mDepth.storeAction, false );
         if( mStencil.texture )
@@ -414,7 +409,7 @@ namespace Ogre
         OGRE_ASSERT_HIGH( dynamic_cast<VulkanTextureGpu *>( mDepth.texture ) );
         VulkanTextureGpu *texture = static_cast<VulkanTextureGpu *>( mDepth.texture );
         VkImage texName = texture->getFinalTextureName();
-        return texture->_createView( texture->getPixelFormat(), mDepth.mipLevel, 1u, mDepth.slice, false,
+        return texture->_createView( texture->getFormat(), mDepth.mipLevel, 1u, mDepth.slice, false,
                                      false, 1u, texName );
     }
     //-----------------------------------------------------------------------------------
@@ -423,26 +418,28 @@ namespace Ogre
         if( fboDesc.mRenderPass )
             return;  // Already initialized
 
+#if 0
         if( mDepth.texture && mDepth.texture->getResidencyStatus() != GpuResidency::Resident )
         {
             OGRE_EXCEPT( Exception::ERR_INVALIDPARAMS,
-                         "RenderTexture '" + mDepth.texture->getNameStr() + "' must be resident!",
+                         "RenderTexture '" + mDepth.texture->getName() + "' must be resident!",
                          "VulkanRenderPassDescriptor::updateFbo" );
         }
 
         if( mStencil.texture && mStencil.texture->getResidencyStatus() != GpuResidency::Resident )
         {
             OGRE_EXCEPT( Exception::ERR_INVALIDPARAMS,
-                         "RenderTexture '" + mStencil.texture->getNameStr() + "' must be resident!",
+                         "RenderTexture '" + mStencil.texture->getName() + "' must be resident!",
                          "VulkanRenderPassDescriptor::updateFbo" );
         }
+#endif
 
         if( !mDepth.texture )
         {
             if( mStencil.texture )
             {
                 OGRE_EXCEPT( Exception::ERR_RENDERINGAPI_ERROR,
-                             "Stencil without depth (RenderTexture '" + mStencil.texture->getNameStr() +
+                             "Stencil without depth (RenderTexture '" + mStencil.texture->getName() +
                                  "'). This is not supported by Vulkan",
                              "VulkanRenderPassDescriptor::updateFbo" );
             }
@@ -468,11 +465,12 @@ namespace Ogre
 
         for( size_t i = 0; i < mNumColourEntries; ++i )
         {
+#if 0
             if( mColour[i].texture->getResidencyStatus() != GpuResidency::Resident )
             {
                 OGRE_EXCEPT(
                     Exception::ERR_INVALIDPARAMS,
-                    "RenderTexture '" + mColour[i].texture->getNameStr() + "' must be resident!",
+                    "RenderTexture '" + mColour[i].texture->getName() + "' must be resident!",
                     "VulkanRenderPassDescriptor::updateFbo" );
             }
             if( i > 0 && hasRenderWindow != mColour[i].texture->isRenderWindowSpecific() )
@@ -482,10 +480,11 @@ namespace Ogre
                              "Cannot use RenderWindow as MRT with other colour textures",
                              "VulkanRenderPassDescriptor::updateFbo" );
             }
+#endif
 
             hasRenderWindow |= mColour[i].texture->isRenderWindowSpecific();
 
-            if( mColour[i].texture->getPixelFormat() == PFG_NULL )
+            if( mColour[i].texture->getFormat() == PF_UNKNOWN )
                 continue;
 
             OGRE_ASSERT_HIGH( dynamic_cast<VulkanTextureGpu *>( mColour[i].texture ) );
@@ -502,7 +501,7 @@ namespace Ogre
             }
 
             mClearValues[attachmentIdx].color =
-                getClearColour( mColour[i].clearColour, mColour[i].texture->getPixelFormat() );
+                getClearColour( mColour[i].clearColour, mColour[i].texture->getFormat() );
 
             setupColourAttachment( i, fboDesc, attachments, attachmentIdx, colourAttachRefs,
                                    resolveAttachRefs, numColourAttachments, false );
@@ -515,7 +514,7 @@ namespace Ogre
 
         if( mDepth.texture )
         {
-            if( !mRenderSystem->isReverseDepth() )
+            if( !mRenderSystem->isReverseDepthBufferEnabled() )
                 mClearValues[attachmentIdx].depthStencil.depth = static_cast<float>( mDepth.clearDepth );
             else
             {
@@ -606,13 +605,13 @@ namespace Ogre
     void VulkanRenderPassDescriptor::destroyFbo( VulkanQueue *queue,
                                                  VulkanFrameBufferDescValue &fboDesc )
     {
-        VaoManager *vaoManager = queue->getVaoManager();
+        //VaoManager *vaoManager = queue->getVaoManager();
 
         {
             FastArray<VkFramebuffer>::const_iterator itor = fboDesc.mFramebuffers.begin();
             FastArray<VkFramebuffer>::const_iterator endt = fboDesc.mFramebuffers.end();
             while( itor != endt )
-                delayed_vkDestroyFramebuffer( vaoManager, queue->mDevice, *itor++, 0 );
+                vkDestroyFramebuffer( queue->mDevice, *itor++, 0 );
             fboDesc.mFramebuffers.clear();
         }
 
@@ -621,7 +620,7 @@ namespace Ogre
             FastArray<VkImageView>::const_iterator endt = fboDesc.mWindowImageViews.end();
 
             while( itor != endt )
-                delayed_vkDestroyImageView( vaoManager, queue->mDevice, *itor++, 0 );
+                vkDestroyImageView( queue->mDevice, *itor++, 0 );
             fboDesc.mWindowImageViews.clear();
         }
 
@@ -629,20 +628,21 @@ namespace Ogre
         {
             if( fboDesc.mImageViews[i] )
             {
-                delayed_vkDestroyImageView( vaoManager, queue->mDevice, fboDesc.mImageViews[i], 0 );
+                vkDestroyImageView( queue->mDevice, fboDesc.mImageViews[i], 0 );
                 fboDesc.mImageViews[i] = 0;
             }
         }
         fboDesc.mNumImageViews = 0u;
 
-        delayed_vkDestroyRenderPass( vaoManager, queue->mDevice, fboDesc.mRenderPass, 0 );
+        vkDestroyRenderPass( queue->mDevice, fboDesc.mRenderPass, 0 );
         fboDesc.mRenderPass = 0;
     }
     //-----------------------------------------------------------------------------------
     void VulkanRenderPassDescriptor::notifySwapchainCreated( VulkanWindow *window )
     {
-        if( mNumColourEntries > 0 && mColour[0].texture->isRenderWindowSpecific() &&
-            mColour[0].texture == window->getTexture() )
+        mColour[0].texture = window->getTexture(); // FIXME
+        //if( mNumColourEntries > 0 && mColour[0].texture->isRenderWindowSpecific() &&
+        //    mColour[0].texture == window->getTexture() )
         {
             entriesModified( RenderPassDescriptor::All );
         }
@@ -659,7 +659,7 @@ namespace Ogre
     //-----------------------------------------------------------------------------------
     void VulkanRenderPassDescriptor::entriesModified( uint32 entryTypes )
     {
-        RenderPassDescriptor::entriesModified( entryTypes );
+        //RenderPassDescriptor::entriesModified( entryTypes );
 
         checkRenderWindowStatus();
 
@@ -676,8 +676,8 @@ namespace Ogre
         mTargetHeight = 0u;
         if( anyTargetTexture )
         {
-            mTargetWidth = anyTargetTexture->getInternalWidth();
-            mTargetHeight = anyTargetTexture->getInternalHeight();
+            mTargetWidth = anyTargetTexture->getWidth();
+            mTargetHeight = anyTargetTexture->getHeight();
         }
 
         if( entryTypes & RenderPassDescriptor::All )
@@ -686,7 +686,7 @@ namespace Ogre
     //-----------------------------------------------------------------------------------
     void VulkanRenderPassDescriptor::setClearColour( uint8 idx, const ColourValue &clearColour )
     {
-        RenderPassDescriptor::setClearColour( idx, clearColour );
+        //RenderPassDescriptor::setClearColour( idx, clearColour );
 
         size_t attachmentIdx = 0u;
         for( size_t i = 0u; i < idx; ++i )
@@ -697,7 +697,7 @@ namespace Ogre
         }
 
         mClearValues[attachmentIdx].color =
-            getClearColour( clearColour, mColour[idx].texture->getPixelFormat() );
+            getClearColour( clearColour, mColour[idx].texture->getFormat() );
     }
     //-----------------------------------------------------------------------------------
     void VulkanRenderPassDescriptor::setClearDepth( Real clearDepth )
@@ -706,7 +706,7 @@ namespace Ogre
         if( mDepth.texture && mSharedFboItor != mRenderSystem->_getFrameBufferDescMap().end() )
         {
             size_t attachmentIdx = mSharedFboItor->second.mNumImageViews - 1u;
-            if( !mRenderSystem->isReverseDepth() )
+            if( !mRenderSystem->isReverseDepthBufferEnabled() )
                 mClearValues[attachmentIdx].depthStencil.depth = static_cast<float>( mDepth.clearDepth );
             else
             {
@@ -735,7 +735,7 @@ namespace Ogre
         {
             mColour[i].clearColour = clearColour;
             mClearValues[attachmentIdx].color =
-                getClearColour( clearColour, mColour[i].texture->getPixelFormat() );
+                getClearColour( clearColour, mColour[i].texture->getFormat() );
             ++attachmentIdx;
             if( mColour->resolveTexture )
                 ++attachmentIdx;
@@ -750,7 +750,7 @@ namespace Ogre
         assert( this->mNumColourEntries == other->mNumColourEntries );
 
         const RenderSystemCapabilities *capabilities = mRenderSystem->getCapabilities();
-        const bool isTiler = capabilities->hasCapability( RSC_IS_TILER );
+        const bool isTiler = false;//capabilities->hasCapability( RSC_IS_TILER );
 
         for( size_t i = 0; i < mNumColourEntries; ++i )
         {
@@ -897,10 +897,9 @@ namespace Ogre
     //-----------------------------------------------------------------------------------
     //-----------------------------------------------------------------------------------
     //-----------------------------------------------------------------------------------
-    VulkanFrameBufferDescKey::VulkanFrameBufferDescKey() : FrameBufferDescKey() {}
+    VulkanFrameBufferDescKey::VulkanFrameBufferDescKey() {}
     //-----------------------------------------------------------------------------------
-    VulkanFrameBufferDescKey::VulkanFrameBufferDescKey( const RenderPassDescriptor &desc ) :
-        FrameBufferDescKey( desc )
+    VulkanFrameBufferDescKey::VulkanFrameBufferDescKey( const RenderPassDescriptor &desc )
     {
         // Base class ignores these. We can't.
         for( size_t i = 0; i < numColourEntries; ++i )
@@ -917,7 +916,10 @@ namespace Ogre
     //-----------------------------------------------------------------------------------
     bool VulkanFrameBufferDescKey::operator<( const VulkanFrameBufferDescKey &other ) const
     {
-        return FrameBufferDescKey::operator<( other );
+        if( this->numColourEntries != other.numColourEntries )
+            return this->numColourEntries < other.numColourEntries;
+
+        return false;
     }
     //-----------------------------------------------------------------------------------
     //-----------------------------------------------------------------------------------

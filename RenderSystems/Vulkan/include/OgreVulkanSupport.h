@@ -56,9 +56,8 @@ namespace Ogre
          * that is a string in the form of wxh
          */
         virtual void addConfig( VulkanRenderSystem *renderSystem );
-        virtual void setConfigOption( const String &name, const String &value );
 
-        virtual String validateConfigOptions( void );
+        virtual String validateConfigOptions( VulkanRenderSystem *renderSystem );
 
         uint32 getSelectedDeviceIdx( void ) const;
 
@@ -72,27 +71,5 @@ namespace Ogre
         ConfigOptionMap mOptions;
     };
 }  // namespace Ogre
-
-#ifndef DEFINING_VK_SUPPORT_IMPL
-#    if OGRE_PLATFORM == OGRE_PLATFORM_WIN32
-#        include "Windowing/win32/OgreVulkanWin32Support.h"
-namespace Ogre
-{
-    inline VulkanSupport *getVulkanSupport() { return new VulkanWin32Support(); }
-}  // namespace Ogre
-#    elif OGRE_PLATFORM == OGRE_PLATFORM_LINUX
-#        include "Windowing/X11/OgreVulkanXcbSupport.h"
-namespace Ogre
-{
-    inline VulkanSupport *getVulkanSupport() { return new VulkanXcbSupport(); }
-}  // namespace Ogre
-#    elif OGRE_PLATFORM == OGRE_PLATFORM_ANDROID
-#        include "Windowing/Android/OgreVulkanAndroidSupport.h"
-namespace Ogre
-{
-    inline VulkanSupport *getVulkanSupport() { return new VulkanAndroidSupport(); }
-}  // namespace Ogre
-#    endif
-#endif
 
 #endif

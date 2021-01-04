@@ -32,18 +32,16 @@ THE SOFTWARE.
 #include "OgreVulkanQueue.h"
 #include "OgreVulkanTextureGpu.h"
 #include "OgreVulkanUtils.h"
-#include "Vao/OgreVulkanVaoManager.h"
 
-#include "OgrePixelFormatGpuUtils.h"
-#include "OgreTextureBox.h"
-#include "OgreTextureGpuManager.h"
+#include "OgrePixelFormat.h"
+#include "OgreTextureManager.h"
 
 namespace Ogre
 {
     VulkanAsyncTextureTicket::VulkanAsyncTextureTicket( uint32 width, uint32 height,
                                                         uint32 depthOrSlices,  //
-                                                        TextureTypes::TextureTypes textureType,
-                                                        PixelFormatGpu pixelFormatFamily,
+                                                        TextureType textureType,
+                                                        PixelFormat pixelFormatFamily,
                                                         VulkanVaoManager *vaoManager,
                                                         VulkanQueue *queue ) :
         AsyncTextureTicket( width, height, depthOrSlices, textureType, pixelFormatFamily ),
@@ -53,11 +51,11 @@ namespace Ogre
         mQueue( queue )
     {
         const uint32 rowAlignment = 4u;
-        const size_t sizeBytes = PixelFormatGpuUtils::getSizeBytes( width, height, depthOrSlices, 1u,
+        const size_t sizeBytes = PixelUtil::getSizeBytes( width, height, depthOrSlices, 1u,
                                                                     mPixelFormatFamily, rowAlignment );
         // Vulkan requires offsets to be multiple of the texel's block size.
         const size_t alignment =
-            PixelFormatGpuUtils::getSizeBytes( 1u, 1u, 1u, 1u, mPixelFormatFamily, 1u );
+            PixelUtil::getSizeBytes( 1u, 1u, 1u, 1u, mPixelFormatFamily, 1u );
 
         mVboName =
             mVaoManager->allocateRawBuffer( VulkanVaoManager::CPU_READ_WRITE, sizeBytes, alignment );
@@ -79,7 +77,7 @@ namespace Ogre
     }
     //-----------------------------------------------------------------------------------
     void VulkanAsyncTextureTicket::downloadFromGpu( TextureGpu *textureSrc, uint8 mipLevel,
-                                                    bool accurateTracking, TextureBox *srcBox )
+                                                    bool accurateTracking, PixelBox *srcBox )
     {
         AsyncTextureTicket::downloadFromGpu( textureSrc, mipLevel, accurateTracking, srcBox );
 
@@ -91,8 +89,8 @@ namespace Ogre
             mAccurateFence = 0;
         }
 
-        TextureBox srcTextureBox;
-        TextureBox fullSrcTextureBox( textureSrc->getEmptyBox( mipLevel ) );
+        PixelBox srcTextureBox;
+        PixelBox fullSrcTextureBox( textureSrc->getEmptyBox( mipLevel ) );
 
         if( !srcBox )
             srcTextureBox = fullSrcTextureBox;
@@ -136,7 +134,7 @@ namespace Ogre
         size_t destBytesPerRow = getBytesPerRow();
         // size_t destBytesPerImage = getBytesPerImage();
 
-        if( PixelFormatGpuUtils::isCompressed( mPixelFormatFamily ) )
+        if( PixelUtil::isCompressed( mPixelFormatFamily ) )
         {
             destBytesPerRow = 0;
             // destBytesPerImage = 0;
@@ -148,7 +146,7 @@ namespace Ogre
         if( destBytesPerRow != 0 )
         {
             region.bufferRowLength = static_cast<uint32_t>(
-                destBytesPerRow / PixelFormatGpuUtils::getBytesPerPixel( mPixelFormatFamily ) );
+                destBytesPerRow / PixelUtil::getBytesPerPixel( mPixelFormatFamily ) );
         }
         region.bufferImageHeight = 0;
 
@@ -175,17 +173,17 @@ namespace Ogre
         }
     }
     //-----------------------------------------------------------------------------------
-    TextureBox VulkanAsyncTextureTicket::mapImpl( uint32 slice )
+    PixelBox VulkanAsyncTextureTicket::mapImpl( uint32 slice )
     {
         waitForDownloadToFinish();
 
-        TextureBox retVal;
+        PixelBox retVal;
 
-        retVal = TextureBox( mWidth, mHeight, getDepth(), getNumSlices(),
-                             (uint32)PixelFormatGpuUtils::getBytesPerPixel( mPixelFormatFamily ),
+        retVal = PixelBox( mWidth, mHeight, getDepth(), getNumSlices(),
+                             (uint32)PixelUtil::getBytesPerPixel( mPixelFormatFamily ),
                              (uint32)getBytesPerRow(), (uint32)getBytesPerImage() );
 
-        if( PixelFormatGpuUtils::isCompressed( mPixelFormatFamily ) )
+        if( PixelUtil::isCompressed( mPixelFormatFamily ) )
             retVal.setCompressedPixelFormat( mPixelFormatFamily );
 
         retVal.data = mVboName.map();

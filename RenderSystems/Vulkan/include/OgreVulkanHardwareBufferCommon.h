@@ -32,20 +32,19 @@ Copyright (c) 2000-2014 Torus Knot Software Ltd
 #include "OgreVulkanPrerequisites.h"
 
 #include "OgreHardwareBuffer.h"
-#include "Vao/OgreVulkanVaoManager.h"
 
 namespace Ogre
 {
 namespace v1
 {
-    class _OgreVulkanExport VulkanHardwareBufferCommon
+    class _OgreVulkanExport VulkanHardwareBufferCommon : public HardwareBuffer
     {
     private:
         VulkanRawBuffer mBuffer;
         VulkanDevice *mDevice;
         VulkanDiscardBuffer *mDiscardBuffer;
         VaoManager *mVaoManager;
-        StagingBuffer *mStagingBuffer;
+        VulkanStagingBuffer *mStagingBuffer;
         uint32 mLastFrameUsed;
         uint32 mLastFrameGpuWrote;
 

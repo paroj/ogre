@@ -99,8 +99,7 @@ namespace Ogre
         RootLayout::parseRootLayout( rootLayout, bCompute, filename );
     }
     //-------------------------------------------------------------------------
-    void VulkanRootLayout::generateRootLayoutMacros( uint32 shaderStage, ShaderSyntax shaderType,
-                                                     String &inOutString ) const
+    void VulkanRootLayout::generateRootLayoutMacros(uint32 shaderStage, String& inOutString) const
     {
         String macroStr;
         macroStr.swap( inOutString );
@@ -139,19 +138,19 @@ namespace Ogre
                                 }
                             }
 
-                            if( shaderType == GLSL )
+                            //if( shaderType == GLSL )
                             {
                                 // #define ogre_P0 set = 1, binding = 6
                                 textStr.a( "0", " set = ", (uint32)i,
                                            ", binding = ", numPrevStagesWithParams, "\n" );
                             }
-                            else
+                            /*else
                             {
                                 // #define ogre_B3 c3
                                 textStr.a( "0 " );
                                 textStr.aChar( c_HLSLBufferTypesMap[j] );
                                 textStr.a( numPrevStagesWithParams, "\n" );
-                            }
+                            }*/
 
                             macroStr += textStr.c_str();
                         }
