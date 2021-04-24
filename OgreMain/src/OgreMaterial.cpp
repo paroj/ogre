@@ -459,12 +459,11 @@ namespace Ogre {
             else
             {
                 // Log informational
-                StringStream str;
+                auto str = LogManager::getSingleton().stream(LML_TRIVIAL);
                 str << "Material " << mName << " Technique " << techNo;
                 if (!(*i)->getName().empty())
                     str << "(" << (*i)->getName() << ")";
                 str << " is not supported. " << compileMessages;
-                LogManager::getSingleton().logMessage(str.str(), LML_TRIVIAL);
                 mUnsupportedReasons += compileMessages;
             }
         }

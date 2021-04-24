@@ -262,7 +262,7 @@ namespace Ogre {
             }
         }
 
-        StringStream str;
+        auto str = LogManager::getSingleton().stream(LML_TRIVIAL);
         if (numFreed)
         {
             str << "HardwareBufferManager: Freed " << numFreed << " unused temporary vertex buffers.";
@@ -271,7 +271,6 @@ namespace Ogre {
         {
             str << "HardwareBufferManager: No unused temporary vertex buffers found.";
         }
-        LogManager::getSingleton().logMessage(str.str(), LML_TRIVIAL);
     }
     //-----------------------------------------------------------------------
     void HardwareBufferManagerBase::_releaseBufferCopies(bool forceFreeUnused)

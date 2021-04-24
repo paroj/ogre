@@ -328,7 +328,7 @@ namespace Ogre {
         }
 
         // Log a message
-        StringStream ss;
+        auto ss = LogManager::getSingleton().stream();
         ss << "RenderSystem::_createRenderWindow \"" << name << "\", " <<
             width << "x" << height << " ";
         if (fullScreen)
@@ -345,7 +345,6 @@ namespace Ogre {
                 ss << p.first << "=" << p.second << " ";
             }
         }
-        LogManager::getSingleton().logMessage(ss.str());
 
         return NULL;
     }

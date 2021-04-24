@@ -1202,12 +1202,9 @@ namespace Ogre
         return false; // not found!
     }
     //-----------------------------------------------------------------------
-    void ConvexBody::logInfo( void ) const
+    void ConvexBody::logInfo(void) const
     {
-        StringStream ssOut( std::stringstream::out );
-        ssOut << *this;
-        
-        Ogre::LogManager::getSingleton().logMessage( Ogre::LML_NORMAL, ssOut.str()  );
+        Ogre::LogManager::getSingleton().stream() << *this;
     }
 }
 

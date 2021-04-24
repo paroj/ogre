@@ -193,15 +193,12 @@ namespace Ogre {
             threads. Multiple threads can hold their own Stream instances pointing
             at the same Log though and that is threadsafe.
         */
-        class _OgrePrivate Stream
+        class _OgrePrivate Stream : public std::ostringstream
         {
         private:
             Log* mTarget;
             LogMessageLevel mLevel;
             bool mMaskDebug;
-            typedef StringStream BaseStream;
-            BaseStream mCache;
-
         public:
 
             /// Simple type to indicate a flush of the stream to the log
@@ -212,38 +209,26 @@ namespace Ogre {
             {
 
             }
-            // copy constructor
-            Stream(const Stream& rhs) 
-                : mTarget(rhs.mTarget), mLevel(rhs.mLevel), mMaskDebug(rhs.mMaskDebug)
+            // move constructor
+            Stream(Stream&& rhs)
+                : std::ostringstream(std::move(rhs)), mTarget(rhs.mTarget), mLevel(rhs.mLevel), mMaskDebug(rhs.mMaskDebug)
             {
-                // explicit copy of stream required, gcc doesn't like implicit
-                mCache.str(rhs.mCache.str());
             } 
             ~Stream()
             {
                 // flush on destroy
-                if (mCache.tellp() > 0)
+                if (tellp() > 0)
                 {
-                    mTarget->logMessage(mCache.str(), mLevel, mMaskDebug);
+                    mTarget->logMessage(str(), mLevel, mMaskDebug);
                 }
             }
 
-            template <typename T>
-            Stream& operator<< (const T& v)
+            Stream& operator<< (const Flush&)
             {
-                mCache << v;
+                mTarget->logMessage(str(), mLevel, mMaskDebug);
+                str(BLANKSTRING);
                 return *this;
             }
-
-            Stream& operator<< (const Flush& v)
-            {
-                                (void)v;
-                mTarget->logMessage(mCache.str(), mLevel, mMaskDebug);
-                mCache.str(BLANKSTRING);
-                return *this;
-            }
-
-
         };
 
     };

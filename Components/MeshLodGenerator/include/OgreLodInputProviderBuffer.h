@@ -37,8 +37,6 @@
 #include "OgreLogManager.h"
 #include "OgreHeaderPrefix.h"
 
-#include <sstream>
-
 namespace Ogre
 {
 
@@ -83,12 +81,11 @@ protected:
             }
             if (tri->isMalformed()) {
 #if OGRE_DEBUG_MODE
-                std::stringstream str;
+                auto str = LogManager::getSingleton().stream();
                 str << "In " << data->mMeshName << " malformed triangle found with ID: " << LodData::getVectorIDFromPointer(data->mTriangleList, tri) << ". " <<
                 std::endl;
                 printTriangle(tri, str);
                 str << "It will be excluded from Lod level calculations.";
-                LogManager::getSingleton().stream() << str.str();
 #endif
                 tri->isRemoved = true;
                 data->mIndexBufferInfoList[tri->submeshID].indexCount -= 3;

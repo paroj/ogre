@@ -73,14 +73,13 @@ void LodInputProvider::addTriangleToEdges(LodData* data, LodData::Triangle* tria
         LodData::Triangle* duplicate = isDuplicateTriangle(triangle);
         if (duplicate != NULL) {
 #if OGRE_DEBUG_MODE
-            std::stringstream str;
+            auto str = LogManager::getSingleton().stream();
             str << "In " << data->mMeshName << " duplicate triangle found." << std::endl;
             str << "Triangle " << LodData::getVectorIDFromPointer(data->mTriangleList, triangle) << " positions:" << std::endl;
             printTriangle(triangle, str);
             str << "Triangle " << LodData::getVectorIDFromPointer(data->mTriangleList, duplicate) << " positions:" << std::endl;
             printTriangle(duplicate, str);
             str << "Triangle " << LodData::getVectorIDFromPointer(data->mTriangleList, triangle) << " will be excluded from Lod level calculations.";
-            LogManager::getSingleton().stream() << str.str();
 #endif
             triangle->isRemoved = true;
             data->mIndexBufferInfoList[triangle->submeshID].indexCount -= 3;

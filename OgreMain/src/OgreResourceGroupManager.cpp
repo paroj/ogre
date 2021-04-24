@@ -504,13 +504,11 @@ namespace Ogre {
         for( StringVector::iterator it = vec->begin(); it != vec->end(); ++it )
             grp->addToIndex(*it, pArch);
         
-        StringStream msg;
+        auto msg = LogManager::getSingleton().stream();
         msg << "Added resource location '" << name << "' of type '" << locType
             << "' to resource group '" << resGroup << "'";
         if (recursive)
             msg << " with recursive option";
-        LogManager::getSingleton().logMessage(msg.str());
-
     }
     //-----------------------------------------------------------------------
     void ResourceGroupManager::removeResourceLocation(const String& name, 
