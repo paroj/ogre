@@ -40,10 +40,8 @@ THE SOFTWARE.
 #include "vulkan/vulkan_core.h"
 
 #if OGRE_PLATFORM == OGRE_PLATFORM_LINUX
-#include <X11/Xlib-xcb.h>
-#include <xcb/randr.h>
-#include <xcb/xcb.h>
-#include "vulkan/vulkan_xcb.h"
+#include <X11/Xlib.h>
+#include "vulkan/vulkan_xlib.h"
 #endif
 
 #include "OgreDepthBuffer.h"
@@ -440,9 +438,9 @@ namespace Ogre
         mWidth = width;
         mHeight = height;
 
-        xcb_connection_t *mConnection;
-        xcb_screen_t *mScreen;
-        xcb_window_t mXcbWindow;
+        Window window;
+        Display *dpy = NULL;
+        int scr = 0;
 
         if( miscParams )
         {
@@ -453,46 +451,28 @@ namespace Ogre
             OgreAssert( opt != end,  "parentWindowHandle required" );
             {
 #if OGRE_PLATFORM == OGRE_PLATFORM_LINUX
-                Display *dpy = XOpenDisplay(NULL);
-                mConnection = XGetXCBConnection(dpy);
-                mXcbWindow = (xcb_window_t)StringConverter::parseSizeT( opt->second );
+                dpy = XOpenDisplay(NULL);
+                window = (Window)StringConverter::parseSizeT( opt->second );
 
-                XWindowAttributes windowAttrib;
-                XGetWindowAttributes( dpy, mXcbWindow, &windowAttrib );
-
-                int scr = DefaultScreen( dpy );
-
-                const xcb_setup_t *setup = xcb_get_setup( mConnection );
-                xcb_screen_iterator_t iter = xcb_setup_roots_iterator( setup );
-                while( scr-- > 0 )
-                    xcb_screen_next( &iter );
-
-                mScreen = iter.data;
+                scr = DefaultScreen( dpy );
 #endif
             }
 
             parseSharedParams( miscParams );
         }
 
-        PFN_vkGetPhysicalDeviceXcbPresentationSupportKHR get_xcb_presentation_support =
-            (PFN_vkGetPhysicalDeviceXcbPresentationSupportKHR)vkGetInstanceProcAddr(
-                mDevice->mInstance, "vkGetPhysicalDeviceXcbPresentationSupportKHR" );
-        PFN_vkCreateXcbSurfaceKHR create_xcb_surface = (PFN_vkCreateXcbSurfaceKHR)vkGetInstanceProcAddr(
-            mDevice->mInstance, "vkCreateXcbSurfaceKHR" );
-
-        if( !get_xcb_presentation_support( mDevice->mPhysicalDevice, mDevice->mGraphicsQueue.mFamilyIdx,
-                                           mConnection, mScreen->root_visual ) )
+        if( !vkGetPhysicalDeviceXlibPresentationSupportKHR( mDevice->mPhysicalDevice, mDevice->mGraphicsQueue.mFamilyIdx,
+                                           dpy, DefaultVisual(dpy, scr )->visualid))
         {
-            OGRE_EXCEPT( Exception::ERR_RENDERINGAPI_ERROR, "Vulkan not supported on given X11 window",
-                         "VulkanXcbWindow::_initialize" );
+            OGRE_EXCEPT( Exception::ERR_RENDERINGAPI_ERROR, "Vulkan not supported on given X11 window");
         }
 
-        VkXcbSurfaceCreateInfoKHR xcbSurfCreateInfo;
+        VkXlibSurfaceCreateInfoKHR xcbSurfCreateInfo;
         memset( &xcbSurfCreateInfo, 0, sizeof( xcbSurfCreateInfo ) );
-        xcbSurfCreateInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-        xcbSurfCreateInfo.connection = mConnection;
-        xcbSurfCreateInfo.window = mXcbWindow;
-        create_xcb_surface( mDevice->mInstance, &xcbSurfCreateInfo, 0, &mSurfaceKHR );
+        xcbSurfCreateInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
+        xcbSurfCreateInfo.dpy = dpy;
+        xcbSurfCreateInfo.window = window;
+        vkCreateXlibSurfaceKHR( mDevice->mInstance, &xcbSurfCreateInfo, 0, &mSurfaceKHR );
 
         mTexture = new VulkanTextureGpuWindow(0, NULL, "RenderWindow", 0, TEX_TYPE_2D, NULL, this);;
 #if 0

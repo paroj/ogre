@@ -56,8 +56,8 @@ THE SOFTWARE.
 #include "OgreVulkanWindow.h"
 #include "OgrePixelFormat.h"
 
-#   include <xcb/xcb.h>
-#    include "vulkan/vulkan_xcb.h"
+#include <X11/Xlib.h>
+#include "vulkan/vulkan_xlib.h"
 
 #define TODO_addVpCount_to_passpso
 
@@ -743,9 +743,9 @@ namespace Ogre
                 reqInstanceExtensions.push_back( VulkanAndroidWindow::getRequiredExtensionName() );
             }
 #else
-            if( extensionName == VK_KHR_XCB_SURFACE_EXTENSION_NAME )
+            if( extensionName == VK_KHR_XLIB_SURFACE_EXTENSION_NAME )
             {
-                reqInstanceExtensions.push_back( VK_KHR_XCB_SURFACE_EXTENSION_NAME );
+                reqInstanceExtensions.push_back( VK_KHR_XLIB_SURFACE_EXTENSION_NAME );
             }
 #endif
 #if 1 //OGRE_DEBUG_MODE
