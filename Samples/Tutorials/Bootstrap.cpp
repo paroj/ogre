@@ -4,9 +4,10 @@
 // SPDX-License-Identifier: MIT
 
 #include "Ogre.h"
-#include "OgreApplicationContext.h"
+#include "OgreApplicationContextQt.h"
+#include <QGuiApplication>
 
-class MyTestApp : public OgreBites::ApplicationContext, public OgreBites::InputListener
+class MyTestApp : public OgreBites::ApplicationContextQt, public OgreBites::InputListener
 {
 public:
     MyTestApp();
@@ -15,7 +16,7 @@ public:
 };
 
 //! [constructor]
-MyTestApp::MyTestApp() : OgreBites::ApplicationContext("OgreTutorialApp")
+MyTestApp::MyTestApp() : OgreBites::ApplicationContextQt("OgreTutorialApp")
 {
 }
 //! [constructor]
@@ -35,7 +36,7 @@ bool MyTestApp::keyPressed(const OgreBites::KeyboardEvent& evt)
 void MyTestApp::setup(void)
 {
     // do not forget to call the base first
-    OgreBites::ApplicationContext::setup();
+    OgreBites::ApplicationContextQt::setup();
     
     // register for input events
     addInputListener(this);
@@ -78,6 +79,7 @@ void MyTestApp::setup(void)
 //! [main]
 int main(int argc, char *argv[])
 {
+    QGuiApplication qapp(argc, argv);
     MyTestApp app;
     app.initApp();
     app.getRoot()->startRendering();
