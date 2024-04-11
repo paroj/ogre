@@ -1,7 +1,7 @@
 name: PIP packages
 on:
   push:
-    tags: ["v*"]
+    branches: [piptest]
 env:
   TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
   TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
