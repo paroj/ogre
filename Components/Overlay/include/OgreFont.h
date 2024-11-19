@@ -66,9 +66,11 @@ namespace Ogre
 
         CodePoint codePoint;
         UVRect uvRect;
-        float aspectRatio; // width/ height
-        float bearing; // bearingX/ height
-        float advance; // advanceX/ height
+        float aspectRatio; // width / font_height
+        float bearing; // bearingX / font_height
+        float advance; // advanceX / font_height
+        float bearingY; // bearingY / font_height
+        float height; // height / font_height
     };
 
     /** Class representing a font in the system.

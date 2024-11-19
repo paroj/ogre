@@ -496,7 +496,7 @@ namespace Ogre
                 for(int j = 0; j < buffer_h; j++ )
                 {
                     uchar* pSrc = buffer + j * buffer_pitch;
-                    uint32 row = j + m + y_bearing;
+                    uint32 row = j + m;
                     uchar* pDest = img.getData(l, row);
                     for(unsigned int k = 0; k < width; k++ )
                     {
@@ -519,10 +519,12 @@ namespace Ogre
                 UVRect uvs((Real)l / (Real)img.getWidth(),            // u1
                            (Real)m / (Real)img.getHeight(),           // v1
                            (Real)(l + width) / (Real)img.getWidth(),  // u2
-                           (m + max_height) / (Real)img.getHeight()); // v2
-
-                float font_height = max_height;
-                setGlyphInfo({cp, uvs, width / font_height, x_bearing / font_height, advance / font_height});
+                           (m + buffer_h) / (Real)img.getHeight()); // v2
+                
+                // https://freetype.org/freetype2/docs/glyphs/glyphs-2.html
+                float font_height = mTtfSize * mTtfResolution * vpScale / 72.0f;
+                setGlyphInfo({cp, uvs, width / font_height, x_bearing / font_height, advance / font_height,
+                              y_bearing / font_height, buffer_h / font_height});
 
                 // Advance a column
                 if(width)
