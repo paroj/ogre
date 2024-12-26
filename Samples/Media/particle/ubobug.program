@@ -1,0 +1,48 @@
+vertex_program TestBug_VS hlsl glsl
+{
+    source ubobug_vs.hlsl
+    target vs_3_0
+
+    default_params
+    {
+        param_named_auto modelViewProj worldviewproj_matrix
+    }
+}
+
+fragment_program TestBug_PS hlsl glsl
+{
+    source ubobug_fs.hlsl
+    target ps_3_0
+
+    default_params
+    {
+        param_named_auto lightDiffuse light_diffuse_colour_array 20
+        param_named_auto lightSpecular light_diffuse_colour_array 20
+        param_named_auto lightAttenuation light_diffuse_colour_array 20
+        param_named_auto lightPosition light_diffuse_colour_array 20
+        param_named_auto lightDirection light_diffuse_colour_array 20
+        param_named_auto lightSpotParams light_diffuse_colour_array 20
+    }
+}
+
+material TestBug
+{
+    technique
+    {
+        pass
+        {
+            vertex_program_ref TestBug_VS
+            {
+            }
+
+            fragment_program_ref TestBug_PS
+            {
+            }
+
+            texture_unit DiffuseMap
+            {
+                texture nskingr.jpg // Ninja
+            }
+        }
+    }
+}
