@@ -332,6 +332,8 @@ namespace Ogre {
         */
         void clear(void);
 
+        void _dropGraveyardPasses();
+
         /** Sets whether or not the queue will split passes by their lighting type,
         ie ambient, per-light and decal. 
         */
@@ -452,19 +454,25 @@ namespace Ogre {
         */
         void clear(bool destroy = false)
         {
-            PriorityMap::iterator i, iend;
-            iend = mPriorityGroups.end();
-            for (i = mPriorityGroups.begin(); i != iend; ++i)
+            for (const auto& pg : mPriorityGroups)
             {
                 if (destroy)
-                    OGRE_DELETE i->second;
+                    OGRE_DELETE pg.second;
                 else
-                    i->second->clear();
+                    pg.second->clear();
             }
 
             if (destroy)
                 mPriorityGroups.clear();
 
+        }
+
+        void _dropGraveyardPasses() const
+        {
+            for (const auto& pg : mPriorityGroups)
+            {
+                pg.second->_dropGraveyardPasses();
+            }
         }
 
         /** Indicate whether a given queue group will be doing any

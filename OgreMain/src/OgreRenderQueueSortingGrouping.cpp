@@ -228,7 +228,7 @@ namespace {
         mTransparents.removePassGroup(p); // shouldn't be any, but for completeness
     }   
     //-----------------------------------------------------------------------
-    void RenderPriorityGroup::clear(void)
+    void RenderPriorityGroup::_dropGraveyardPasses()
     {
         // Delete queue groups which are using passes which are to be
         // deleted, we won't need these any more and they clutter up 
@@ -242,6 +242,10 @@ namespace {
                 removePassEntry(p);
             }
         }
+    }
+    void RenderPriorityGroup::clear(void)
+    {
+        _dropGraveyardPasses();
 
         // Now remove any dirty passes, these will have their hashes recalculated
         // by the parent queue after all groups have been processed

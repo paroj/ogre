@@ -2935,7 +2935,11 @@ SceneManager::RenderContext* SceneManager::_pauseRendering()
     context->viewport = mCurrentViewport;
     context->camera = mCameraInProgress;
     context->activeChain = _getActiveCompositorChain();
-
+    for(const auto& g : context->renderQueue->_getQueueGroups())
+    {
+        if(g)
+            g->_dropGraveyardPasses();
+    }
     mDestRenderSystem->_endFrame();
     mRenderQueue = 0;
     return context;
@@ -2943,6 +2947,11 @@ SceneManager::RenderContext* SceneManager::_pauseRendering()
 //---------------------------------------------------------------------
 void SceneManager::_resumeRendering(SceneManager::RenderContext* context)
 {
+    for(const auto& g : context->renderQueue->_getQueueGroups())
+    {
+        if(g)
+            g->_dropGraveyardPasses();
+    }
     mRenderQueue.reset(context->renderQueue);
     _setActiveCompositorChain(context->activeChain);
     Ogre::Viewport* vp = context->viewport;
