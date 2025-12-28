@@ -182,6 +182,9 @@ void TargetRenderState::acquirePrograms(Pass* pass)
         bindUniformParameters(mProgramSet->getCpuProgram(type), pass->getGpuProgramParameters(type));
     }
 
+    if(mLightCount)
+        pass->getGpuProgramParameters(GPT_FRAGMENT_PROGRAM)->addSharedParameters("OgreCurrentLights");
+
     if (hasError)
     {
         LogManager::getSingleton().logError(

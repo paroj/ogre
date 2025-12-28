@@ -26,6 +26,10 @@ THE SOFTWARE.
 -----------------------------------------------------------------------------
 */
 #include "OgreGpuProgram.h"
+#include "OgreGpuProgramManager.h"
+#include "OgreGpuProgramParams.h"
+#include "OgreHardwareBufferManager.h"
+#include "OgreLight.h"
 #include "OgreRenderSystem.h"
 #include "OgreStableHeaders.h"
 
@@ -3623,6 +3627,40 @@ void SceneManager::useLights(const LightList* lights, ushort limit)
         // Other bits of information will have to be looked up
         mAutoParamDataSource->setCurrentLightList(lights);
         mGpuParamsDirty |= GPV_LIGHTS;
+
+        GpuSharedParametersPtr lightsUBO;
+        if(GpuProgramManager::getSingleton().getAvailableSharedParameters().count("OgreCurrentLights"))
+            lightsUBO = GpuProgramManager::getSingleton().getSharedParameters("OgreCurrentLights");
+        else
+            lightsUBO = GpuProgramManager::getSingleton().createSharedParameters("OgreCurrentLights");
+        auto numLights = lights->size();
+        if (numLights && (lightsUBO->getConstantDefinitions().map.empty() ||
+            lightsUBO->getConstantDefinition("light_position_view_space_array").arraySize != numLights))
+        {
+            printf("Resizing lights UBO to %zu lights\n", numLights);
+            lightsUBO->removeAllConstantDefinitions();
+            lightsUBO->addConstantDefinition("light_position_view_space_array", GCT_FLOAT4, numLights);
+            lightsUBO->addConstantDefinition("light_attenuation_array", GCT_FLOAT4, numLights);
+            lightsUBO->addConstantDefinition("spotlight_params_array", GCT_FLOAT4, numLights);
+            lightsUBO->addConstantDefinition("light_direction_view_space_array", GCT_FLOAT4, numLights);
+            // always read by Cook Torrance, only read by FFP when TVC_DIFFUSE
+            lightsUBO->addConstantDefinition("light_diffuse_colour_power_scaled_array", GCT_FLOAT4, numLights);
+            // only read by FFP lighting when specular is on, never read by Cook Torrance
+            // lightsUBO->addConstantDefinition("light_specular_colour_array", GCT_FLOAT4, numLights);
+        }
+
+
+        auto source = mAutoParamDataSource.get();
+        lightsUBO->setNamedConstant("light_position_view_space_array",
+                                    source->getLightPositionViewSpaceArray(numLights)->ptr(), numLights * 4);
+        lightsUBO->setNamedConstant("light_attenuation_array", source->getLightAttenuationArray(numLights)->ptr(),
+                                    numLights * 4);
+        lightsUBO->setNamedConstant("spotlight_params_array", source->getSpotlightParamsArray(numLights)->ptr(),
+                                    numLights * 4);
+        lightsUBO->setNamedConstant("light_direction_view_space_array",
+                                    source->getLightDirectionViewSpaceArray(numLights)->ptr(), numLights * 4);
+        lightsUBO->setNamedConstant("light_diffuse_colour_power_scaled_array",
+                                    source->getLightDiffuseColourPowerScaledArray(numLights)->ptr(), numLights * 4);
     }
 
     mDestRenderSystem->_useLights(std::min<ushort>(limit, lights->size()));

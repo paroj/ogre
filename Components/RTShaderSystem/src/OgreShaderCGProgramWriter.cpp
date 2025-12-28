@@ -112,6 +112,8 @@ void CGProgramWriter::writeSourceCode(std::ostream& os, Program* program)
     Function* curFunction = program->getMain();
 
     writeFunctionTitle(os, curFunction);
+        os << "#define light_position_view_space_array light_position_view_space_array1\n";
+
     writeFunctionDeclaration(os, curFunction);
 
     os << "{" << std::endl;

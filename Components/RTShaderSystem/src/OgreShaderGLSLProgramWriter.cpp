@@ -214,7 +214,7 @@ void GLSLProgramWriter::writeMainSourceCode(std::ostream& os, Program* program)
     // Write inout params and fill mInputToGLStatesMap
     writeInputParameters(os, curFunction, gpuType);
     writeOutParameters(os, curFunction, gpuType);
-
+    os << "#define light_position_view_space_array light_position_view_space_array1\n";
     // The function name must always main.
     os << "void main(void) {" << std::endl;
 
